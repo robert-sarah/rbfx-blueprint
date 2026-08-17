@@ -238,6 +238,9 @@ private:
         bool scrollToSelection_{};
     } right_;
 
+    /// Search query applied to the visible directory content.
+    ea::string searchQuery_;
+
     struct CursorForHotkeys
     {
         ea::string selectedPath_{};

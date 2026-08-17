@@ -375,6 +375,37 @@ void RbScriptTab::ApplySourceSnapshot(const ea::string& source)
     status_ = "rbscript edit restored";
 }
 
+bool RbScriptTab::WriteAutosaveSnapshot(const ea::string& directory, ea::vector<ea::string>& capturedFiles)
+{
+    if (!GetProject())
+        return false;
+
+    auto fileSystem = GetSubsystem<FileSystem>();
+    bool capturedAny = false;
+    for (const auto& [resourceName, document] : documents_)
+    {
+        if (!document.dirty || resourceName.empty() || resourceName.find("..") != ea::string::npos
+            || resourceName.starts_with("/") || resourceName.find('\\') != ea::string::npos)
+        {
+            continue;
+        }
+
+        const ea::string destination = AddTrailingSlash(directory) + resourceName;
+        if (!fileSystem->CreateDirsRecursive(GetPath(destination)))
+            continue;
+
+        File file(context_, destination, FILE_WRITE);
+        if (!file.IsOpen())
+            continue;
+        if (!document.source.empty() && file.Write(document.source.data(), document.source.size()) != document.source.size())
+            continue;
+
+        capturedFiles.push_back(resourceName);
+        capturedAny = true;
+    }
+    return capturedAny;
+}
+
 void RbScriptTab::CompileActiveDocument()
 {
     if (GetActiveResourceName().empty())

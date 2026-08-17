@@ -24,6 +24,7 @@
 
 #include "../Assets/ModelImporter.h"
 #include "../Core/EditorDesignSystem.h"
+#include "../Core/EditorAutosave.h"
 #include "../Core/EditorPluginManager.h"
 #include "../Foundation/CommandPaletteTab.h"
 #include "../Core/IniHelpers.h"
@@ -245,6 +246,7 @@ Project::Project(
     , pluginManager_(MakeShared<PluginManager>(context_))
     , launchManager_(MakeShared<LaunchManager>(context_))
     , toolManager_(MakeShared<ToolManager>(context_))
+    , editorAutosave_(MakeShared<EditorAutosave>(context_, this))
     , closeDialog_(MakeShared<CloseDialog>(context_))
 {
     auto initializationGuard = ea::make_shared<int>(0);
@@ -602,6 +604,44 @@ ea::string Project::GetRandomTemporaryPath() const
 TemporaryDir Project::CreateTemporaryDir()
 {
     return TemporaryDir{context_, GetRandomTemporaryPath()};
+}
+
+bool Project::HasUnsavedWork() const
+{
+    if (hasUnsavedChanges_)
+        return true;
+
+    for (EditorTab* tab : tabs_)
+    {
+        ea::vector<ea::string> items;
+        tab->EnumerateUnsavedItems(items);
+        if (!items.empty())
+            return true;
+    }
+    return false;
+}
+
+void Project::EnumerateUnsavedItems(ea::vector<ea::string>& items)
+{
+    if (hasUnsavedChanges_)
+        items.push_back("Project");
+
+    for (EditorTab* tab : tabs_)
+    {
+        const unsigned oldSize = items.size();
+        tab->EnumerateUnsavedItems(items);
+        if (items.size() == oldSize && tab->IsOpen())
+        {
+            // Open tabs may keep transient state outside ResourceEditorTab. The tab decides
+            // whether it is dirty; empty entries are intentionally not invented here.
+        }
+    }
+}
+
+void Project::WriteAutosaveSnapshot(const ea::string& directory, ea::vector<ea::string>& capturedFiles)
+{
+    for (EditorTab* tab : tabs_)
+        tab->WriteAutosaveSnapshot(directory, capturedFiles);
 }
 
 void Project::InitializeHotkeys()

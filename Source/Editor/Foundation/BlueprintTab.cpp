@@ -214,6 +214,40 @@ void BlueprintTab::ApplyGraphSnapshot(const ea::string& snapshot)
     graphDirty_ = true;
 }
 
+void BlueprintTab::EnumerateUnsavedItems(ea::vector<ea::string>& items)
+{
+    if (graphDirty_)
+        items.push_back(GetGraphFileName());
+}
+
+bool BlueprintTab::WriteAutosaveSnapshot(const ea::string& directory, ea::vector<ea::string>& capturedFiles)
+{
+    if (!graphDirty_ || !GetProject())
+        return false;
+
+    const ea::string projectPath = AddTrailingSlash(GetProject()->GetProjectPath());
+    const ea::string graphFileName = GetGraphFileName();
+    if (!graphFileName.starts_with(projectPath))
+        return false;
+
+    const ea::string relativeName = graphFileName.substr(projectPath.size());
+    if (relativeName.empty() || relativeName.find("..") != ea::string::npos || relativeName.starts_with("/"))
+        return false;
+
+    const ea::string destination = AddTrailingSlash(directory) + relativeName;
+    auto fileSystem = GetSubsystem<FileSystem>();
+    if (!fileSystem->CreateDirsRecursive(GetPath(destination)))
+        return false;
+
+    BlueprintResource resource(context_);
+    resource.SetGraph(graph_);
+    if (!resource.SaveFile(destination))
+        return false;
+
+    capturedFiles.push_back(relativeName);
+    return true;
+}
+
 bool BlueprintTab::IsSelected(BlueprintId nodeId) const
 {
     for (const BlueprintId selected : selectedNodes_)

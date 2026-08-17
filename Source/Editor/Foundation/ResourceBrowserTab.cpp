@@ -29,6 +29,8 @@
 #include <EASTL/sort.h>
 #include <EASTL/tuple.h>
 
+#include <cctype>
+
 #include <IconFontCppHeaders/IconsFontAwesome6.h>
 
 namespace Urho3D
@@ -59,6 +61,35 @@ bool IsPayloadMovable(const ResourceDragDropPayload& payload)
 {
     return ea::all_of(payload.resources_.begin(), payload.resources_.end(),
         [](const ResourceFileDescriptor& desc) { return !desc.isAutomatic_; });
+}
+
+ea::string ToSearchKey(const ea::string& value)
+{
+    ea::string result;
+    result.reserve(value.size());
+    for (const char character : value)
+        result += static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+    return result;
+}
+
+bool SearchMatchesEntry(const FileSystemEntry& entry, const ea::string& query)
+{
+    if (query.empty())
+        return true;
+
+    const ea::string searchKey = ToSearchKey(query);
+    if (ToSearchKey(entry.localName_).find(searchKey) != ea::string::npos
+        || ToSearchKey(entry.resourceName_).find(searchKey) != ea::string::npos)
+    {
+        return true;
+    }
+
+    for (const FileSystemEntry& child : entry.children_)
+    {
+        if (SearchMatchesEntry(child, query))
+            return true;
+    }
+    return false;
 }
 
 }
@@ -282,6 +313,7 @@ void ResourceBrowserTab::WriteIniSettings(ImGuiTextBuffer& output)
 
     WriteIntToIni(output, "SelectedRoot", left_.selectedRoot_);
     WriteStringToIni(output, "SelectedLeftPath", left_.selectedPath_);
+    WriteStringToIni(output, "SearchQuery", searchQuery_);
     WriteStringToIni(output, "LastSelectedRightPath", right_.lastSelectedPath_);
     WriteStringToIni(output, "SelectedRightPaths", ea::string::joined(selectedRightPaths, ";"));
 }
@@ -295,6 +327,9 @@ void ResourceBrowserTab::ReadIniSettings(const char* line)
 
     if (const auto value = ReadStringFromIni(line, "SelectedLeftPath"))
         SelectLeftPanel(*value);
+
+    if (const auto value = ReadStringFromIni(line, "SearchQuery"))
+        searchQuery_ = *value;
 
     if (const auto value = ReadStringFromIni(line, "LastSelectedRightPath"))
         SelectRightPanel(*value);
@@ -554,7 +589,11 @@ void ResourceBrowserTab::RenderDirectoryContent()
     if (!entry)
         return;
 
-    RenderCreateButton(*entry);
+    ui::AlignTextToFramePadding();
+    ui::TextUnformatted(ICON_FA_FILTER);
+    ui::SameLine();
+    ui::SetNextItemWidth(-1.0f);
+    ui::InputText("##ResourceBrowserSearch", &searchQuery_);
 
     if (!entry->resourceName_.empty())
         RenderDirectoryUp(*entry);
@@ -609,8 +648,11 @@ void ResourceBrowserTab::RenderDirectoryUp(const FileSystemEntry& entry)
 void ResourceBrowserTab::RenderDirectoryContentEntry(const FileSystemEntry& entry)
 {
     const auto project = GetProject();
-    if (IsFileNameIgnored(entry, project, entry.localName_))
+    if (IsFileNameIgnored(entry, project, entry.localName_)
+        || !SearchMatchesEntry(entry, searchQuery_))
+    {
         return;
+    }
 
     const IdScopeGuard guard(entry.localName_.c_str());
 
@@ -741,8 +783,12 @@ void ResourceBrowserTab::RenderCompositeFile(ea::span<const FileSystemEntry*> en
 void ResourceBrowserTab::RenderCompositeFileEntry(const FileSystemEntry& entry, const ea::string& localResourceName)
 {
     const auto project = GetProject();
-    if (IsFileNameIgnored(entry, project, localResourceName))
+    if (IsFileNameIgnored(entry, project, localResourceName)
+        || (!searchQuery_.empty() && ToSearchKey(localResourceName).find(ToSearchKey(searchQuery_)) == ea::string::npos
+            && ToSearchKey(entry.resourceName_).find(ToSearchKey(searchQuery_)) == ea::string::npos))
+    {
         return;
+    }
 
     const IdScopeGuard guard(entry.resourceName_.c_str());
 

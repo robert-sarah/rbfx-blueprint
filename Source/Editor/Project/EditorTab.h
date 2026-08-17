@@ -139,6 +139,9 @@ public:
     virtual EditorTab* GetOwnerTab() { return this; }
     /// Enumerates all unsaved items corresponding to this tab.
     virtual void EnumerateUnsavedItems(ea::vector<ea::string>& items) {}
+    /// Serialize in-memory editor state into an autosave directory without touching the active project.
+    /// Return true when at least one file was captured.
+    virtual bool WriteAutosaveSnapshot(const ea::string& directory, ea::vector<ea::string>& capturedFiles) { return false; }
     /// Push undo action from this tab.
     virtual ea::optional<EditorActionFrame> PushAction(SharedPtr<EditorAction> action);
 

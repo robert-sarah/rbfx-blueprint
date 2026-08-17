@@ -34,8 +34,14 @@ public:
 
     /// Apply a serialized graph snapshot during undo/redo.
     void ApplyGraphSnapshot(const ea::string& snapshot);
+    /// EditorTab integration for close confirmation and autosave recovery.
+    void EnumerateUnsavedItems(ea::vector<ea::string>& items) override;
+    bool WriteAutosaveSnapshot(const ea::string& directory, ea::vector<ea::string>& capturedFiles) override;
 
     /// @}
+
+protected:
+    bool IsMarkedUnsaved() override { return graphDirty_; }
 
 private:
     void CreateDemoGraph();

@@ -57,6 +57,7 @@ class HotkeyManager;
 class ToolManager;
 class UndoManager;
 class CommandPaletteTab;
+class EditorAutosave;
 
 /// Project configuration flags.
 enum class ProjectFlag
@@ -191,6 +192,12 @@ public:
     void MarkUnsaved() { hasUnsavedChanges_ = true; }
     /// Return whether the project itself has unsaved changes.
     bool HasUnsavedChanges() const { return hasUnsavedChanges_; }
+    /// Return whether the project or one of its editor tabs has unsaved work.
+    bool HasUnsavedWork() const;
+    /// Enumerate project and tab items that can be recovered by autosave.
+    void EnumerateUnsavedItems(ea::vector<ea::string>& items);
+    /// Serialize in-memory tab state into an autosave directory.
+    void WriteAutosaveSnapshot(const ea::string& directory, ea::vector<ea::string>& capturedFiles);
 
     /// Select the active editor workspace. The change is persisted in the project UI INI.
     void SetWorkspace(EditorWorkspace workspace);
@@ -319,6 +326,7 @@ private:
     SharedPtr<PluginManager> pluginManager_;
     SharedPtr<LaunchManager> launchManager_;
     SharedPtr<ToolManager> toolManager_;
+    SharedPtr<EditorAutosave> editorAutosave_;
 
     bool assetManagerInitialized_{};
     ea::weak_ptr<void> initializationGuard_;

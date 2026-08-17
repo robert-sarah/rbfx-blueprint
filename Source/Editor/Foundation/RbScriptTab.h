@@ -37,6 +37,8 @@ public:
     bool IsUndoSupported() override { return true; }
     /// Apply an undo/redo source snapshot.
     void ApplySourceSnapshot(const ea::string& source);
+    /// Capture dirty source documents into an autosave directory without writing the active project.
+    bool WriteAutosaveSnapshot(const ea::string& directory, ea::vector<ea::string>& capturedFiles) override;
     void WriteIniSettings(ImGuiTextBuffer& output) override;
     void ReadIniSettings(const char* line) override;
     /// @}
