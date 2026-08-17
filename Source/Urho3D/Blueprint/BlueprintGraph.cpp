@@ -1227,7 +1227,7 @@ bool BlueprintGraph::FromJSON(const JSONValue& value, ea::string* error)
             }
             if (item.Contains("properties") && item["properties"].IsObject())
             {
-                for (const auto& property : item["properties"].GetObject())
+                for (const auto& property : item["properties"].GetObjectValue())
                     node.properties[property.first] = DeserializeVariant(property.second);
             }
             parsed.AddNode(node);

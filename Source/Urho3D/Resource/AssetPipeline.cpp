@@ -135,7 +135,7 @@ bool AssetImportSettings::FromJSON(const JSONValue& value, ea::string* error)
             SetError(error, "Asset import settings properties must be an object.");
             return false;
         }
-        for (const auto& item : value["properties"].GetObject())
+        for (const auto& item : value["properties"].GetObjectValue())
         {
             if (!item.second.IsObject() || !item.second.Contains("type") || !item.second.Contains("value"))
             {

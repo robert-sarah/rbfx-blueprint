@@ -2,42 +2,56 @@
 
 ## Blueprint interactions
 
-The Blueprint canvas now defers context-menu opening to the next UI frame. This prevents an immediate redraw or selection update from closing the menu after a right-click. The existing delete action remains available from the context menu and operates on the selected Blueprint asset after confirmation.
+The Blueprint canvas defers context-menu opening to the next UI frame. This keeps a right-click menu open while selection and canvas ownership are updated. Destructive deletion is routed through a confirmation modal and is recorded as an undoable graph snapshot.
 
-Blueprint assets can be selected from the resource browser, opened in the Blueprint tab, and removed through the context menu. The delete action is intentionally routed through the project resource request system so the browser, active editor tab, and filesystem state remain synchronized.
+Blueprint graph revisions are retained in a bounded history of 32 snapshots. The history panel supports restoration, selecting two revisions for a structural diff, and a conservative non-conflicting merge that preserves the base version when node edits conflict. Graph snapshots are also included in the editor undo/redo stack.
+
+The Blueprint toolbar includes graph validation, execution, JSON export, automatic layout, minimap and comment visibility, history, and runtime watch controls. The canvas provides node search highlighting, reflection-backed node tooltips, double-click fit-to-view, graph statistics, breakpoint markers, and last-executed pin values. Zoom, pan, panel visibility, and pin-value visibility are persisted through the editor INI settings.
+
+Blueprint assets can be selected from the resource browser, opened in the Blueprint tab, and removed through the project resource request system so the browser, active editor tab, and filesystem state remain synchronized.
 
 ## rbscript files
 
-The resource browser registers the `rbscript` resource factory. From the current folder, use **New rbscript** to create a source file under `Data/Scripts/`. The editor generates a unique name such as `Scripts/NewScript.rbscript`, `Scripts/NewScript1.rbscript`, and so on, without overwriting an existing file.
+The resource browser registers the `rbscript` resource factory. From the rbscript tab, **New rbscript** creates a unique source file under `Data/Scripts/` without overwriting an existing resource. Four templates are available: **Empty**, **Component**, **Gameplay**, and **Network**. Every template is checked by the shared rbscript editor contract and uses the typed brace-based rbscript syntax.
 
-The integrated **rbscript** tab provides the following workflow:
+The integrated rbscript tab provides the following workflow:
 
-| Command | Behavior |
+| Command or panel | Behavior |
 |---|---|
-| New rbscript | Creates a source file from the built-in typed gameplay template and opens it. |
+| New rbscript | Creates a source file from the selected typed template and opens it. |
 | Open Browser | Activates the resource browser so an existing `.rbscript` file can be selected. |
-| Compile | Runs the current rbscript document through the editor compiler path. |
-| Save | Writes the active source to the project `Data/` directory. |
-| Auto compile | Recompiles the active document after edits. |
-| Preview | Shows lexical/token information for the current source. |
-| Diagnostics | Shows compiler and runtime diagnostics associated with the document. |
+| Compile | Runs the active source through the editor compiler path. |
+| Save | Writes the active source to the project `Data/` directory and updates the disk baseline. |
+| Auto compile | Recompiles the active document after source edits. |
+| Syntax preview | Displays tokenized rbscript with token-aware colors. |
+| Diagnostics | Shows lexer, parser, compiler, and runtime diagnostics with source locations. |
+| Reflection autocomplete | Offers rbscript keywords and names obtained from the rbfx reflection type and function registries. |
+| Symbol outline | Lists scripts, fields, functions, and event handlers from the parsed AST. Selecting a symbol exposes its definition span and rename action. |
+| Find and replace | Provides editor-local replacement with an undoable source snapshot. |
+| Debugger | Supports breakpoints, step, step-over, continue, stop, call stack, locals, watches, and preservation of breakpoints across recompilation. |
 
-The source editor uses a multiline text control with tab support and keeps an in-memory document per open resource. Saving is performed through the editor resource request system, and external resource reloads update the active document.
+The editor keeps an in-memory document per open resource and parses the AST after tokenization. Symbol spans are retained for navigation and rename operations. Debug refresh preserves breakpoints and records whether the VM state was migrated during hot reload.
 
-## Validation
+## External conflict resolution
 
-The editor configuration was compiled successfully on Linux with `URHO3D_EDITOR=ON`. The complete engine test suite remains green: **305/305 tests passed**.
+The editor maintains the last known disk source for each open resource. When a file watcher reload arrives while the document is dirty and the disk content differs from both the editor source and the previous disk baseline, the tab opens an **rbscript Conflict** modal.
 
-## Remaining production work
+| Conflict action | Result |
+|---|---|
+| Keep mine | Keeps the in-memory source and adopts the new disk content as the comparison baseline. |
+| Use disk | Replaces the in-memory document with the disk source, recompiles it, and clears the dirty state. |
+| Show diff | Displays a line-oriented comparison of the editor and disk versions before choosing an action. |
 
-The current workflow is functional, but the following items are still appropriate for a production-grade editor iteration:
+Self-triggered saves are guarded so their reload notification is not misclassified as an external conflict. Failed writes clear the guard and therefore cannot suppress a later legitimate reload.
 
-1. Add a confirmation dialog and undo entry for destructive Blueprint deletion.
-2. Add file-system watcher conflict resolution when a script is modified both externally and inside the editor.
-3. Add syntax highlighting, symbol navigation, rename refactoring, and code completion backed by the rbscript type registry.
-4. Add a dedicated rbscript debugger with breakpoints, call stack, locals, watches, and hot reload state migration.
-5. Add Blueprint asset recovery, version history, graph diff, and merge tools for collaborative editing.
-6. Add automated UI tests for right-click menus, deletion confirmation, resource creation, save/reload, and editor restart persistence.
-7. Rebuild and smoke-test the Windows distribution after each editor source update; the Linux build verifies compilation but cannot execute the Windows GUI in this environment.
+## Automated contracts and validation
 
-These items are extensions of the current editor workflow, not prerequisites for creating or editing a basic Blueprint or rbscript file.
+`Source/Tests/TestEditorUI.cpp` provides headless editor contracts for rbscript resource routing, all template sources, Blueprint snapshot restoration and deletion invariants, and save/reload source stability. These tests exercise the same shared template and extension contract used by the editor without requiring a platform GUI.
+
+The Linux editor was rebuilt successfully with `URHO3D_EDITOR=ON`. The full test target now contains **309 passing tests**, including the rbscript editor contracts. The Windows cross-build remains a PE validation step; a real Windows GUI smoke test still requires execution on Windows because the Linux environment cannot launch the Windows editor interface.
+
+## Production scope and known validation boundary
+
+The requested editor features are implemented in the fork: safe Blueprint deletion, graph history and recovery, structural diff and conservative merge, rbscript syntax/token presentation, AST symbols, rename, reflection autocomplete, debugger controls, watches, hot-reload breakpoint preservation, external conflict resolution, resource templates, find/replace, Blueprint search and tooltips, graph export, view persistence, runtime pin values, and editor contracts.
+
+> The remaining validation boundary is environmental rather than an unimplemented editor feature: Linux can compile and test the Windows binaries, but cannot replace a real Windows host for an interactive GUI smoke test. The cross-compiled distribution must therefore be tested once on a Windows machine before being described as GUI-validated on Windows.

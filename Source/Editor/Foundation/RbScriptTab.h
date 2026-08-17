@@ -6,6 +6,7 @@
 #include "../Project/ResourceEditorTab.h"
 #include "../Project/Project.h"
 
+#include <Urho3D/RbScript/RbScriptAst.h>
 #include <Urho3D/RbScript/RbScriptDefs.h>
 #include <Urho3D/RbScript/RbScriptResource.h>
 #include <Urho3D/RbScript/RbScriptType.h>
@@ -56,10 +57,21 @@ private:
         ea::string source;
         ea::vector<RbScriptToken> tokens;
         ea::vector<RbScriptDiagnostic> diagnostics;
+        struct Symbol
+        {
+            ea::string name;
+            ea::string kind;
+            RbScriptSourceSpan span;
+        };
         RbScriptChunk chunk;
+        RbScriptModule module;
+        ea::vector<Symbol> symbols;
+        ea::vector<ea::string> watchExpressions;
         RbScriptVM debugVm;
         bool compiled{false};
+        bool dirty{false};
         bool showPreview{true};
+        bool debugStateMigrated{false};
     };
 
     void CreateNewScript();
@@ -73,6 +85,13 @@ private:
     void RenderDebugPanel(Document& document);
     void RenderTokenPreview(const Document& document);
     void RenderAutocomplete(const Document& document);
+    void RenderOutline(Document& document);
+    void RenderConflictDialog();
+    void RenderFindReplace(Document& document);
+    void ParseSymbols(Document& document, const ea::string& resourceName);
+    void StepOverDebug(Document& document);
+    void RenameSymbol(Document& document, const Document::Symbol& symbol, const ea::string& replacement);
+    void ReplaceAll(Document& document, const ea::string& find, const ea::string& replacement);
     void TokenizeDocument(Document& document);
     Document* GetActiveDocument();
     const Document* GetActiveDocument() const;
@@ -80,9 +99,24 @@ private:
     void SetActiveSource(const ea::string& source);
     void PushSourceEdit(const ea::string& before, const ea::string& after);
     ea::map<ea::string, Document> documents_;
+    ea::map<ea::string, ea::string> diskSources_;
+    ea::map<ea::string, bool> conflictPending_;
+    ea::string conflictResource_;
+    ea::string conflictDiskSource_;
+    bool conflictDialogPending_{};
+    bool conflictShowDiff_{};
+    bool ignoreNextReload_{};
     ea::string activeSource_;
     ea::string status_;
     ea::string searchText_;
+    ea::string watchInput_;
+    ea::string findText_;
+    ea::string replaceText_;
+    ea::string renameText_;
+    int selectedSymbol_{-1};
+    unsigned templateIndex_{};
+    bool showOutline_{true};
+    bool showFindReplace_{};
     int selectedDiagnostic_{-1};
     bool showDiagnostics_{true};
     bool showPreview_{true};

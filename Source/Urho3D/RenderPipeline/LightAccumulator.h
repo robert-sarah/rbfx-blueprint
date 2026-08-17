@@ -26,6 +26,8 @@
 #include "../Math/SphericalHarmonics.h"
 #include "../Scene/Node.h"
 
+#include <cassert>
+
 #include <EASTL/fixed_vector.h>
 #include <EASTL/sort.h>
 

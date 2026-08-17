@@ -112,6 +112,7 @@ BlueprintTab::BlueprintTab(Context* context)
     runtime_.RegisterReflectedNodes(context);
     CreateDemoGraph();
     graphFileName_ = GetGraphFileName();
+    RecordGraphRevision("Initial graph", graph_.ToString());
 }
 
 void BlueprintTab::CreateDemoGraph()
@@ -135,6 +136,7 @@ void BlueprintTab::CreateDemoGraph()
     selectedNode_ = eventNode;
     graphDirty_ = false;
     status_ = "Demo graph ready";
+    RecordGraphRevision("New demo graph", graph_.ToString());
 }
 
 void BlueprintTab::AddPin(BlueprintNode& node, const ea::string& name, BlueprintPinKind kind,
@@ -186,7 +188,10 @@ void BlueprintTab::CommitGraphEdit(const ea::string& status)
 
     const ea::string after = graph_.ToString();
     if (after != graphEditSnapshot_)
+    {
         PushAction<BlueprintGraphSnapshotAction>(this, graphEditSnapshot_, after);
+        RecordGraphRevision(status.empty() ? "Blueprint graph edit" : status, after);
+    }
     graphEditSnapshot_.clear();
     graphDirty_ = true;
     if (!status.empty())
@@ -309,7 +314,15 @@ bool BlueprintTab::DeserializeSelection(const ea::string& serialized, const Vect
     return !selectedNodes_.empty();
 }
 
-void BlueprintTab::DeleteSelected()
+void BlueprintTab::RequestDeleteSelected()
+{
+    if (selectedNodes_.empty())
+        return;
+    deleteConfirmationText_ = Format("Delete {} selected Blueprint node(s)? This action can be undone.", selectedNodes_.size());
+    deleteConfirmationPending_ = true;
+}
+
+void BlueprintTab::ConfirmDeleteSelected()
 {
     if (selectedNodes_.empty())
         return;
@@ -319,6 +332,12 @@ void BlueprintTab::DeleteSelected()
     selectedNodes_.clear();
     selectedNode_ = BLUEPRINT_INVALID_ID;
     CommitGraphEdit("Selected Blueprint nodes deleted");
+    status_ = "Selected Blueprint nodes deleted";
+}
+
+void BlueprintTab::DeleteSelected()
+{
+    RequestDeleteSelected();
 }
 
 void BlueprintTab::CopySelection()
@@ -417,6 +436,14 @@ void BlueprintTab::RenderContent()
         RenderDiagnostics();
     }
     ui::EndChild();
+
+    if (deleteConfirmationPending_)
+    {
+        ui::OpenPopup("Confirm Blueprint deletion");
+        deleteConfirmationPending_ = false;
+    }
+    RenderDeleteConfirmation();
+    RenderGraphHistory();
 }
 
 void BlueprintTab::RenderToolbar()
@@ -430,6 +457,9 @@ void BlueprintTab::RenderToolbar()
     if (ui::Button("Save"))
         SaveGraph();
     ui::SameLine();
+    if (ui::Button("Export JSON"))
+        ExportGraphJson();
+    ui::SameLine();
     if (ui::Button("Validate"))
     {
         const BlueprintValidationResult result = graph_.Validate();
@@ -439,6 +469,7 @@ void BlueprintTab::RenderToolbar()
     if (ui::Button("Run"))
     {
         const bool success = runtime_.ExecuteEvent(graph_, "Event.OnStart");
+        showPinValues_ = success;
         status_ = success ? "Graph executed" : "Runtime error";
     }
     ui::SameLine();
@@ -462,6 +493,9 @@ void BlueprintTab::RenderToolbar()
     ui::SameLine();
     if (ui::Button(showComments_ ? "Hide Comments" : "Show Comments"))
         showComments_ = !showComments_;
+    ui::SameLine();
+    if (ui::Button("History"))
+        showHistory_ = !showHistory_;
     ui::SameLine();
     RenderDebugToolbar();
     ui::SameLine();
@@ -520,6 +554,9 @@ void BlueprintTab::RenderGraphCanvas()
         if (oldZoom == zoom_)
             pan_ += Vector2::ZERO;
     }
+
+    if (hovered && ui::IsMouseDoubleClicked(MOUSEB_LEFT))
+        ResetGraphView(canvasSize);
 
     if (hovered && ui::IsMouseClicked(MOUSEB_RIGHT))
     {
@@ -606,6 +643,21 @@ void BlueprintTab::RenderGraphCanvas()
     RenderLinkPreview(canvasOrigin, drawList);
     for (const BlueprintNode& node : graph_.GetNodes())
         RenderNode(node, canvasOrigin, drawList);
+
+    if (hovered)
+    {
+        if (const BlueprintNode* hoveredNode = FindNodeAt(ScreenToGraph(io.MousePos, canvasOrigin)))
+        {
+            if (const BlueprintNodeDefinition* definition = runtime_.GetRegistry().Find(hoveredNode->typeName))
+            {
+                ui::BeginTooltip();
+                ui::TextUnformatted(hoveredNode->title.c_str());
+                if (!definition->description.empty())
+                    ui::TextWrapped("%s", definition->description.c_str());
+                ui::EndTooltip();
+            }
+        }
+    }
     RenderSelectionOverlay(canvasOrigin, drawList);
     if (showMinimap_)
         RenderMinimap(canvasOrigin, canvasSize);
@@ -736,7 +788,7 @@ void BlueprintTab::RenderNodeContextMenu()
         DuplicateSelection();
     if (ui::MenuItem("Delete", GetHotkeyLabel(Hotkey_Delete).c_str(), false, !selectedNodes_.empty()))
     {
-        DeleteSelected();
+        RequestDeleteSelected();
         ui::CloseCurrentPopup();
     }
     if (ui::MenuItem("Toggle breakpoint", GetHotkeyLabel(Hotkey_Breakpoint).c_str(), false, selectedNode_ != BLUEPRINT_INVALID_ID))
@@ -764,6 +816,9 @@ void BlueprintTab::RenderNode(const BlueprintNode& node, const ImVec2& canvasOri
     drawList->AddRectFilled(topLeft, topLeft + ImVec2{NodeWidth * zoom_, HeaderHeight * zoom_}, headerColor, 6.0f,
         ImDrawFlags_RoundCornersTop);
     drawList->AddRect(topLeft, bottomRight, IM_COL32(110, 120, 135, 255), 6.0f, 0, 1.0f);
+    if (NodeMatchesSearch(node))
+        drawList->AddRect(topLeft - ImVec2{2.0f, 2.0f}, bottomRight + ImVec2{2.0f, 2.0f},
+            IM_COL32(255, 205, 70, 255), 7.0f, 0, 2.5f);
 
     drawList->AddText(topLeft + ImVec2{10.0f, 8.0f} * zoom_, IM_COL32(245, 245, 250, 255), node.title.c_str());
     if (IsSelected(node.id))
@@ -785,6 +840,18 @@ void BlueprintTab::RenderNode(const BlueprintNode& node, const ImVec2& canvasOri
         const ImVec2 textSize = ui::CalcTextSize(pin.displayName.c_str()) * zoom_;
         drawList->AddText(output ? textPosition - ImVec2{textSize.x, 0} : textPosition,
             IM_COL32(225, 228, 235, 255), pin.displayName.c_str());
+        if (showPinValues_)
+        {
+            const Variant value = runtime_.GetValue(node.id, pin.name);
+            if (!value.IsEmpty())
+            {
+                const ea::string valueText = value.ToString();
+                drawList->AddText(output ? topLeft + ImVec2{NodeWidth * zoom_ - 10.0f, (GetPinY(node, i) + 7.0f) * zoom_}
+                                         - ImVec2{ui::CalcTextSize(valueText.c_str()).x * zoom_, 0}
+                                         : topLeft + ImVec2{10.0f, (GetPinY(node, i) + 7.0f) * zoom_},
+                    IM_COL32(170, 220, 175, 255), valueText.c_str());
+            }
+        }
     }
 }
 
@@ -796,8 +863,8 @@ void BlueprintTab::RenderDiagnostics()
     const BlueprintValidationResult validation = graph_.Validate();
     if (validation.IsValid())
     {
-        ui::TextColored({0.45f, 0.9f, 0.55f, 1.0f}, "Graph valid: %u node(s), %u link(s)",
-            graph_.GetNodes().size(), graph_.GetLinks().size());
+        ui::TextColored({0.45f, 0.9f, 0.55f, 1.0f}, "Graph valid: %u node(s), %u link(s), %u function(s)",
+            graph_.GetNodes().size(), graph_.GetLinks().size(), graph_.GetFunctions().size());
     }
     else
     {
@@ -1199,10 +1266,185 @@ void BlueprintTab::RenderWatchWindow()
     ui::EndChild();
 }
 
+void BlueprintTab::RecordGraphRevision(const ea::string& label, const ea::string& snapshot)
+{
+    if (snapshot.empty())
+        return;
+    if (!graphHistory_.empty() && graphHistory_.back().snapshot == snapshot)
+    {
+        if (!label.empty())
+            graphHistory_.back().label = label;
+        return;
+    }
+
+    GraphRevision revision;
+    revision.label = label.empty() ? "Blueprint graph revision" : label;
+    revision.snapshot = snapshot;
+    revision.serial = nextGraphRevision_++;
+    graphHistory_.push_back(revision);
+    while (graphHistory_.size() > 32)
+        graphHistory_.erase(graphHistory_.begin());
+}
+
+void BlueprintTab::RenderDeleteConfirmation()
+{
+    if (!ui::BeginPopupModal("Confirm Blueprint deletion", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        return;
+
+    ui::TextWrapped("%s", deleteConfirmationText_.c_str());
+    ui::Separator();
+    if (ui::Button("Delete", ImVec2{110.0f, 0.0f}))
+    {
+        ConfirmDeleteSelected();
+        ui::CloseCurrentPopup();
+    }
+    ui::SameLine();
+    if (ui::Button("Cancel", ImVec2{110.0f, 0.0f}))
+    {
+        status_ = "Blueprint deletion cancelled";
+        ui::CloseCurrentPopup();
+    }
+    ui::EndPopup();
+}
+
+void BlueprintTab::RenderGraphHistory()
+{
+    if (!showHistory_)
+        return;
+    if (!ui::BeginChild("##BlueprintGraphHistory", ImVec2{0.0f, 230.0f}, true))
+    {
+        ui::EndChild();
+        return;
+    }
+
+    ui::Text("Blueprint graph history");
+    ui::SameLine();
+    ui::TextDisabled("(%u revision(s), maximum 32)", graphHistory_.size());
+    ui::Separator();
+
+    for (int i = static_cast<int>(graphHistory_.size()) - 1; i >= 0; --i)
+    {
+        const GraphRevision& revision = graphHistory_[i];
+        ui::PushID(static_cast<int>(revision.serial));
+        ui::Text("#%llu  %s", revision.serial, revision.label.c_str());
+        ui::SameLine();
+        if (ui::SmallButton("Restore"))
+        {
+            ApplyGraphSnapshot(revision.snapshot);
+            RecordGraphRevision(Format("Restored revision #{}", revision.serial), revision.snapshot);
+            status_ = Format("Restored Blueprint revision #{}", revision.serial);
+        }
+        ui::SameLine();
+        if (ui::SmallButton("A"))
+            diffRevisionA_ = i;
+        ui::SameLine();
+        if (ui::SmallButton("B"))
+            diffRevisionB_ = i;
+        ui::PopID();
+    }
+
+    if (diffRevisionA_ >= 0 && diffRevisionB_ >= 0
+        && diffRevisionA_ < static_cast<int>(graphHistory_.size())
+        && diffRevisionB_ < static_cast<int>(graphHistory_.size()))
+    {
+        const GraphRevision& first = graphHistory_[diffRevisionA_];
+        const GraphRevision& second = graphHistory_[diffRevisionB_];
+        BlueprintGraph firstGraph;
+        BlueprintGraph secondGraph;
+        ea::string firstError;
+        ea::string secondError;
+        const bool firstValid = firstGraph.FromString(first.snapshot, &firstError);
+        const bool secondValid = secondGraph.FromString(second.snapshot, &secondError);
+        ui::Separator();
+        ui::Text("Diff: #%llu -> #%llu", first.serial, second.serial);
+        if (firstValid && secondValid)
+        {
+            ui::Text("Nodes: %u -> %u | Links: %u -> %u", firstGraph.GetNodes().size(), secondGraph.GetNodes().size(),
+                firstGraph.GetLinks().size(), secondGraph.GetLinks().size());
+            ui::Text("Snapshot size: %u -> %u bytes", first.snapshot.size(), second.snapshot.size());
+            if (ui::Button("Merge non-conflicting changes"))
+                MergeGraphRevisions();
+        }
+        else
+            ui::TextColored({1.0f, 0.45f, 0.35f, 1.0f}, "Unable to parse selected revisions: %s / %s",
+                firstError.c_str(), secondError.c_str());
+        if (ui::SmallButton("Clear diff selection"))
+        {
+            diffRevisionA_ = -1;
+            diffRevisionB_ = -1;
+        }
+    }
+    ui::EndChild();
+}
+
+void BlueprintTab::MergeGraphRevisions()
+{
+    if (diffRevisionA_ < 0 || diffRevisionB_ < 0
+        || diffRevisionA_ >= static_cast<int>(graphHistory_.size())
+        || diffRevisionB_ >= static_cast<int>(graphHistory_.size())
+        || diffRevisionA_ == diffRevisionB_)
+        return;
+
+    BlueprintGraph baseGraph;
+    BlueprintGraph incomingGraph;
+    ea::string error;
+    if (!baseGraph.FromString(graphHistory_[diffRevisionA_].snapshot, &error)
+        || !incomingGraph.FromString(graphHistory_[diffRevisionB_].snapshot, &error))
+    {
+        status_ = Format("Unable to merge Blueprint revisions: {}", error);
+        return;
+    }
+
+    const ea::string before = graph_.ToString();
+    unsigned addedNodes = 0;
+    unsigned conflicts = 0;
+    for (const BlueprintNode& incoming : incomingGraph.GetNodes())
+    {
+        BlueprintNode* existing = baseGraph.GetNode(incoming.id);
+        if (!existing)
+        {
+            baseGraph.AddNode(incoming);
+            ++addedNodes;
+        }
+        else if (existing->typeName != incoming.typeName || existing->title != incoming.title
+            || existing->position != incoming.position)
+            ++conflicts;
+    }
+
+    for (const BlueprintLink& incomingLink : incomingGraph.GetLinks())
+    {
+        bool exists = false;
+        for (const BlueprintLink& existingLink : baseGraph.GetLinks())
+        {
+            if (existingLink.fromNode == incomingLink.fromNode && existingLink.fromPin == incomingLink.fromPin
+                && existingLink.toNode == incomingLink.toNode && existingLink.toPin == incomingLink.toPin)
+            {
+                exists = true;
+                break;
+            }
+        }
+        if (!exists && baseGraph.GetNode(incomingLink.fromNode) && baseGraph.GetNode(incomingLink.toNode))
+            baseGraph.AddLink(incomingLink);
+    }
+
+    const ea::string merged = baseGraph.ToString();
+    if (merged == before)
+    {
+        status_ = conflicts ? Format("Merge produced no changes ({} conflict(s))", conflicts) : "Merge produced no changes";
+        return;
+    }
+
+    PushAction<BlueprintGraphSnapshotAction>(this, before, merged);
+    ApplyGraphSnapshot(merged);
+    RecordGraphRevision(Format("Merged revisions ({} node(s), {} conflict(s))", addedNodes, conflicts), merged);
+    status_ = Format("Merged Blueprint revisions: {} node(s) added, {} conflict(s) kept from base", addedNodes, conflicts);
+}
+
 void BlueprintTab::PerformAutoLayout()
 {
+    BeginGraphEdit();
     graph_.AutoLayout();
-    graphDirty_ = true;
+    CommitGraphEdit("Automatic node layout applied");
     status_ = "Automatic node layout applied";
 }
 
@@ -1223,6 +1465,12 @@ void BlueprintTab::WriteIniSettings(ImGuiTextBuffer& output)
     BaseClassName::WriteIniSettings(output);
     WriteStringToIni(output, "Zoom", Format("{}", zoom_));
     WriteStringToIni(output, "Pan", Format("{},{}", pan_.x_, pan_.y_));
+    WriteStringToIni(output, "ShowHistory", showHistory_ ? "1" : "0");
+    WriteStringToIni(output, "ShowMinimap", showMinimap_ ? "1" : "0");
+    WriteStringToIni(output, "ShowComments", showComments_ ? "1" : "0");
+    WriteStringToIni(output, "ShowWatch", showWatchWindow_ ? "1" : "0");
+    WriteStringToIni(output, "ShowTypes", showTypePanels_ ? "1" : "0");
+    WriteStringToIni(output, "ShowPinValues", showPinValues_ ? "1" : "0");
 }
 
 void BlueprintTab::ReadIniSettings(const char* line)
@@ -1232,6 +1480,31 @@ void BlueprintTab::ReadIniSettings(const char* line)
         zoom_ = Clamp(ToFloat(*value), 0.35f, 2.5f);
     if (const auto value = ReadStringFromIni(line, "Pan"))
         pan_ = ToVector2(*value);
+    if (const auto value = ReadStringFromIni(line, "ShowHistory"))
+        showHistory_ = *value == "1" || *value == "true";
+    if (const auto value = ReadStringFromIni(line, "ShowMinimap"))
+        showMinimap_ = *value == "1" || *value == "true";
+    if (const auto value = ReadStringFromIni(line, "ShowComments"))
+        showComments_ = *value == "1" || *value == "true";
+    if (const auto value = ReadStringFromIni(line, "ShowWatch"))
+        showWatchWindow_ = *value == "1" || *value == "true";
+    if (const auto value = ReadStringFromIni(line, "ShowTypes"))
+        showTypePanels_ = *value == "1" || *value == "true";
+    if (const auto value = ReadStringFromIni(line, "ShowPinValues"))
+        showPinValues_ = *value == "1" || *value == "true";
+}
+
+void BlueprintTab::ExportGraphJson()
+{
+    const ea::string jsonFileName = GetGraphFileName() + ".json";
+    const ea::string serialized = graph_.ToString();
+    File file(context_, jsonFileName, FILE_WRITE);
+    if (!file.IsOpen() || file.Write(serialized.data(), serialized.size()) != serialized.size())
+    {
+        status_ = Format("Unable to export Blueprint JSON: {}", jsonFileName);
+        return;
+    }
+    status_ = Format("Blueprint JSON exported to {}", jsonFileName);
 }
 
 void BlueprintTab::SaveGraph()
@@ -1245,6 +1518,7 @@ void BlueprintTab::SaveGraph()
     if (resource.SaveFile(GetGraphFileName()))
     {
         graphDirty_ = false;
+        RecordGraphRevision("Saved Blueprint resource", graph_.ToString());
         status_ = "Blueprint resource saved";
     }
     else
@@ -1265,12 +1539,54 @@ void BlueprintTab::LoadGraph()
     selectedNodes_.clear();
     selectedNode_ = BLUEPRINT_INVALID_ID;
     graphDirty_ = false;
+    RecordGraphRevision("Loaded Blueprint resource", graph_.ToString());
     status_ = "Blueprint resource loaded";
 }
 
 ea::string BlueprintTab::GetGraphFileName() const
 {
     return GetProject() ? AddTrailingSlash(GetProject()->GetProjectPath()) + "Blueprints/Main.blueprint" : "Main.blueprint";
+}
+
+void BlueprintTab::ResetGraphView(const ImVec2& canvasSize)
+{
+    if (graph_.GetNodes().empty())
+    {
+        zoom_ = 1.0f;
+        pan_ = Vector2::ZERO;
+        return;
+    }
+
+    Vector2 minimum = graph_.GetNodes().front().position;
+    Vector2 maximum = minimum;
+    for (const BlueprintNode& node : graph_.GetNodes())
+    {
+        minimum.x_ = Min(minimum.x_, node.position.x_);
+        minimum.y_ = Min(minimum.y_, node.position.y_);
+        maximum.x_ = Max(maximum.x_, node.position.x_ + NodeWidth);
+        maximum.y_ = Max(maximum.y_, node.position.y_ + GetNodeHeight(node));
+    }
+
+    const Vector2 extent = maximum - minimum;
+    zoom_ = Clamp(Min((canvasSize.x - 48.0f) / Max(extent.x_, 1.0f),
+        (canvasSize.y - 48.0f) / Max(extent.y_, 1.0f)), 0.35f, 2.5f);
+    pan_ = Vector2((canvasSize.x - extent.x_ * zoom_) * 0.5f - minimum.x_ * zoom_,
+        (canvasSize.y - extent.y_ * zoom_) * 0.5f - minimum.y_ * zoom_);
+    status_ = "Blueprint view fitted to graph";
+}
+
+bool BlueprintTab::NodeMatchesSearch(const BlueprintNode& node) const
+{
+    if (nodeSearch_.empty())
+        return false;
+    if (node.typeName.find(nodeSearch_) != ea::string::npos || node.title.find(nodeSearch_) != ea::string::npos)
+        return true;
+    if (const BlueprintNodeDefinition* definition = runtime_.GetRegistry().Find(node.typeName))
+    {
+        return definition->category.find(nodeSearch_) != ea::string::npos
+            || definition->description.find(nodeSearch_) != ea::string::npos;
+    }
+    return false;
 }
 
 BlueprintNode* BlueprintTab::FindNodeAt(const Vector2& graphPosition)

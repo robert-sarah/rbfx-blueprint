@@ -231,6 +231,8 @@ public:
     const ea::vector<JSONValue>& GetArray() const { return IsArray() ? *arrayValue_ : emptyArray; }
     /// Return JSON object value.
     const ea::map<ea::string, JSONValue>& GetObject() const { return IsObject() ? *objectValue_ : emptyObject; }
+    /// Return JSON object value through a Win32-macro-safe name.
+    const ea::map<ea::string, JSONValue>& GetObjectValue() const { return IsObject() ? *objectValue_ : emptyObject; }
 
     // JSON array functions
     /// Return JSON value at index.

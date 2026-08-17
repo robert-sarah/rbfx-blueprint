@@ -4,6 +4,7 @@
 #include "RbScriptTab.h"
 
 #include "../Core/IniHelpers.h"
+#include <Urho3D/RbScript/RbScriptEditorContract.h>
 #include "ResourceBrowserTab.h"
 
 #include <Urho3D/Core/StringUtils.h>
@@ -12,6 +13,7 @@
 #include <Urho3D/IO/Log.h>
 #include <Urho3D/Resource/ResourceCache.h>
 #include <Urho3D/RbScript/RbScriptLexer.h>
+#include <Urho3D/RbScript/RbScriptParser.h>
 #include <Urho3D/SystemUI/Widgets.h>
 
 namespace Urho3D
@@ -81,6 +83,19 @@ ea::string ProjectFileName(Project* project, const ea::string& resourceName)
     if (!project || IsAbsoluteFileName(resourceName))
         return resourceName;
     return AddTrailingSlash(project->GetProjectPath()) + resourceName;
+}
+
+ea::string ReadTextFile(Context* context, const ea::string& fileName)
+{
+    File file(context, fileName, FILE_READ);
+    if (!file.IsOpen())
+        return {};
+    const unsigned size = file.GetSize();
+    ea::string source;
+    source.resize(size);
+    if (size && file.Read(&source[0], size) != size)
+        return {};
+    return source;
 }
 
 class RbScriptSourceSnapshotAction final : public EditorAction
@@ -154,13 +169,7 @@ void RbScriptTab::CreateNewScript()
         return;
     }
 
-    const ea::string source =
-        "// rbscript source file\\n"
-        "// This file is created by the rbfx editor.\\n\\n"
-        "script Main {\\n"
-        "    fn on_start() {\\n"
-        "    }\\n"
-        "}\\n";
+    const ea::string source = RbScriptEditorContract::GetTemplateSource(templateIndex_);
     if (file.Write(source.data(), source.size()) != source.size())
     {
         status_ = Format("Unable to write {}", resourceName);
@@ -187,7 +196,7 @@ void RbScriptTab::FocusResourceBrowser()
 
 bool RbScriptTab::CanOpenResource(const ResourceFileDescriptor& desc)
 {
-    return desc.HasObjectType<RbScriptResource>() || desc.HasExtension(".rbscript");
+    return desc.HasObjectType<RbScriptResource>() || RbScriptEditorContract::IsRbScriptResourcePath(desc.resourceName_);
 }
 
 RbScriptTab::Document* RbScriptTab::GetActiveDocument()
@@ -214,11 +223,33 @@ void RbScriptTab::SetActiveSource(const ea::string& source)
         document->source = source;
 }
 
+void RbScriptTab::ParseSymbols(Document& document, const ea::string& resourceName)
+{
+    document.module = RbScriptModule{};
+    document.symbols.clear();
+    RbScriptParser parser(document.tokens, resourceName);
+    document.module = parser.ParseModule();
+    for (const RbScriptDiagnostic& diagnostic : parser.GetDiagnostics())
+        document.diagnostics.push_back(diagnostic);
+
+    if (!document.module.name.empty())
+        document.symbols.push_back({document.module.name, "module", {}});
+    for (const RbScriptScript& script : document.module.scripts)
+    {
+        document.symbols.push_back({script.name, "script", script.span});
+        for (const RbScriptField& field : script.fields)
+            document.symbols.push_back({field.name, "field", field.span});
+        for (const RbScriptFunction& function : script.functions)
+            document.symbols.push_back({function.name, function.eventHandler ? "event" : "function", function.span});
+    }
+}
+
 void RbScriptTab::TokenizeDocument(Document& document)
 {
     RbScriptLexer lexer(document.source, GetActiveResourceName());
     document.tokens = lexer.Tokenize();
     document.diagnostics = lexer.GetDiagnostics();
+    ParseSymbols(document, GetActiveResourceName());
 }
 
 void RbScriptTab::RefreshDocument(const ea::string& resourceName, bool compile)
@@ -228,12 +259,17 @@ void RbScriptTab::RefreshDocument(const ea::string& resourceName, bool compile)
         return;
 
     Document& document = iter->second;
+    const bool wasDebugging = document.debugVm.IsDebugging();
+    const unsigned previousDebugLine = document.debugVm.GetCurrentLine();
+    const ea::vector<unsigned> previousBreakpoints = document.debugVm.GetBreakpoints();
     document.debugVm.StopDebug();
     document.chunk = RbScriptChunk{};
     RbScriptLexer lexer(document.source, resourceName);
     document.tokens = lexer.Tokenize();
     document.diagnostics = lexer.GetDiagnostics();
+    ParseSymbols(document, resourceName);
     document.compiled = false;
+    document.debugStateMigrated = false;
 
     if (compile && document.diagnostics.empty())
     {
@@ -242,6 +278,17 @@ void RbScriptTab::RefreshDocument(const ea::string& resourceName, bool compile)
         document.diagnostics = resource.GetDiagnostics();
         if (document.compiled)
             document.chunk = resource.GetChunk();
+    }
+
+    for (const unsigned line : previousBreakpoints)
+        document.debugVm.SetBreakpoint(line);
+    if (wasDebugging && document.compiled)
+    {
+        document.debugStateMigrated = document.debugVm.BeginDebug(document.chunk);
+        for (const unsigned line : previousBreakpoints)
+            document.debugVm.SetBreakpoint(line);
+        if (previousDebugLine > 0)
+            status_ = Format("rbscript hot reload migrated; previous line {}", previousDebugLine);
     }
 
     if (resourceName == GetActiveResourceName())
@@ -254,6 +301,7 @@ void RbScriptTab::ApplySource(const ea::string& resourceName, const ea::string& 
     if (iter == documents_.end())
         return;
     iter->second.source = source;
+    iter->second.dirty = true;
     RefreshDocument(resourceName, compile);
 }
 
@@ -273,6 +321,8 @@ void RbScriptTab::LoadDocument(const ea::string& resourceName)
     }
 
     RefreshDocument(resourceName, true);
+    diskSources_[resourceName] = document.source;
+    conflictPending_[resourceName] = false;
     activeSource_ = document.source;
     status_ = Format("Loaded {}", resourceName);
 }
@@ -284,21 +334,27 @@ void RbScriptTab::SaveDocument(const ea::string& resourceName)
         return;
 
     const ea::string fileName = ProjectFileName(GetProject(), resourceName);
+    const ea::string source = iter->second.source;
+    ignoreNextReload_ = true;
     File file(context_, fileName, FILE_WRITE);
     if (!file.IsOpen())
     {
+        ignoreNextReload_ = false;
         status_ = Format("Unable to save {}", resourceName);
         return;
     }
 
-    const ea::string& source = iter->second.source;
     if (!source.empty() && file.Write(source.data(), source.size()) != source.size())
     {
+        ignoreNextReload_ = false;
         status_ = Format("Unable to write {}", resourceName);
         return;
     }
 
     RefreshDocument(resourceName, true);
+    iter->second.dirty = false;
+    diskSources_[resourceName] = source;
+    conflictPending_[resourceName] = false;
     status_ = Format("Saved {}", resourceName);
 }
 
@@ -314,6 +370,8 @@ void RbScriptTab::ApplySourceSnapshot(const ea::string& source)
     if (GetActiveResourceName().empty())
         return;
     ApplySource(GetActiveResourceName(), source, autoCompile_);
+    if (Document* document = GetActiveDocument())
+        document->dirty = true;
     status_ = "rbscript edit restored";
 }
 
@@ -369,6 +427,9 @@ void RbScriptTab::RenderDebugPanel(Document& document)
         status_ = document.debugVm.HadError() ? "rbscript debug step failed" : "rbscript debug step complete";
     }
     ui::SameLine();
+    if (ui::Button("Step Over") && document.debugVm.IsDebugging())
+        StepOverDebug(document);
+    ui::SameLine();
     if (ui::Button("Continue") && document.debugVm.IsDebugging())
     {
         document.debugVm.ContinueDebug();
@@ -391,6 +452,50 @@ void RbScriptTab::RenderDebugPanel(Document& document)
     ui::SameLine();
     if (ui::SmallButton("Remove breakpoint"))
         document.debugVm.RemoveBreakpoint(breakpointLine_);
+
+    ui::Separator();
+    ui::Text("Breakpoints");
+    const ea::vector<unsigned> activeBreakpoints = document.debugVm.GetBreakpoints();
+    for (const unsigned activeLine : activeBreakpoints)
+    {
+        ui::PushID(static_cast<int>(activeLine));
+        ui::BulletText("line %u", activeLine);
+        ui::SameLine();
+        if (ui::SmallButton("Remove"))
+            document.debugVm.RemoveBreakpoint(activeLine);
+        ui::PopID();
+    }
+
+    ui::Separator();
+    ui::Text("Watches");
+    ui::SetNextItemWidth(250.0f);
+    ui::InputText("Expression", &watchInput_);
+    ui::SameLine();
+    if (ui::SmallButton("Add watch") && !watchInput_.empty())
+    {
+        bool exists = false;
+        for (const ea::string& expression : document.watchExpressions)
+            exists = exists || expression == watchInput_;
+        if (!exists)
+            document.watchExpressions.push_back(watchInput_);
+        watchInput_.clear();
+    }
+    for (unsigned i = 0; i < document.watchExpressions.size(); ++i)
+    {
+        const ea::string& expression = document.watchExpressions[i];
+        ui::PushID(static_cast<int>(i));
+        const auto local = document.debugVm.GetLocals().find(expression);
+        ui::BulletText("%s = %s", expression.c_str(),
+            local != document.debugVm.GetLocals().end() ? local->second.ToString().c_str() : "<not a local>");
+        ui::SameLine();
+        if (ui::SmallButton("Remove"))
+        {
+            document.watchExpressions.erase(document.watchExpressions.begin() + i);
+            ui::PopID();
+            break;
+        }
+        ui::PopID();
+    }
 
     if (document.debugVm.IsDebugging())
     {
@@ -443,7 +548,10 @@ void RbScriptTab::RenderTokenPreview(const Document& document)
 
 void RbScriptTab::RenderAutocomplete(const Document& document)
 {
-    (void)document;
+    if (!ui::CollapsingHeader("Reflection autocomplete", ImGuiTreeNodeFlags_DefaultOpen))
+        return;
+
+    ui::InputText("Completion filter", &searchText_);
     if (searchText_.empty())
         return;
 
@@ -458,7 +566,7 @@ void RbScriptTab::RenderAutocomplete(const Document& document)
     for (const ea::string& name : typeRegistry_.GetFunctionNames())
         suggestions.push_back(name);
 
-    ui::Text("Suggestions");
+    ui::Text("Suggestions from rbfx reflection and rbscript keywords");
     unsigned shown = 0;
     for (const ea::string& suggestion : suggestions)
     {
@@ -472,8 +580,173 @@ void RbScriptTab::RenderAutocomplete(const Document& document)
     }
 }
 
+void RbScriptTab::RenderOutline(Document& document)
+{
+    if (!showOutline_ || !ui::CollapsingHeader("Symbol outline", ImGuiTreeNodeFlags_DefaultOpen))
+        return;
+    if (document.symbols.empty())
+    {
+        ui::TextDisabled("No symbols available; fix parser diagnostics first.");
+        return;
+    }
+
+    for (unsigned i = 0; i < document.symbols.size(); ++i)
+    {
+        const Document::Symbol& symbol = document.symbols[i];
+        ui::PushID(static_cast<int>(i));
+        const bool selected = selectedSymbol_ == static_cast<int>(i);
+        if (ui::Selectable(Format("{}  {}", symbol.kind, symbol.name).c_str(), selected))
+        {
+            selectedSymbol_ = static_cast<int>(i);
+            status_ = Format("{} '{}' at line {}, column {}", symbol.kind, symbol.name,
+                symbol.span.begin.line, symbol.span.begin.column);
+        }
+        if (ui::IsItemHovered())
+            ui::SetTooltip("Go to definition: line %u, column %u", symbol.span.begin.line, symbol.span.begin.column);
+        ui::PopID();
+    }
+
+    if (selectedSymbol_ >= 0 && selectedSymbol_ < static_cast<int>(document.symbols.size()))
+    {
+        const Document::Symbol& symbol = document.symbols[selectedSymbol_];
+        ui::InputText("Rename to", &renameText_);
+        ui::SameLine();
+        if (ui::SmallButton("Rename") && !renameText_.empty())
+        {
+            RenameSymbol(document, symbol, renameText_);
+            renameText_.clear();
+        }
+    }
+}
+
+void RbScriptTab::ReplaceAll(Document& document, const ea::string& find, const ea::string& replacement)
+{
+    if (find.empty())
+        return;
+    const ea::string before = document.source;
+    ea::string updated;
+    ea::string::size_type cursor = 0;
+    unsigned count = 0;
+    while (cursor < before.size())
+    {
+        const ea::string::size_type match = before.find(find, cursor);
+        if (match == ea::string::npos)
+        {
+            updated += before.substr(cursor);
+            break;
+        }
+        updated += before.substr(cursor, match - cursor);
+        updated += replacement;
+        cursor = match + find.size();
+        ++count;
+    }
+    if (!count)
+        return;
+
+    PushSourceEdit(before, updated);
+    document.source = updated;
+    document.dirty = true;
+    activeSource_ = updated;
+    RefreshDocument(GetActiveResourceName(), autoCompile_);
+    status_ = Format("Replaced {} occurrence(s)", count);
+}
+
+void RbScriptTab::RenameSymbol(Document& document, const Document::Symbol& symbol, const ea::string& replacement)
+{
+    ReplaceAll(document, symbol.name, replacement);
+}
+
+void RbScriptTab::RenderFindReplace(Document& document)
+{
+    if (!showFindReplace_)
+        return;
+    if (!ui::BeginChild("##RbScriptFindReplace", ImVec2{0.0f, 86.0f}, true))
+    {
+        ui::EndChild();
+        return;
+    }
+    ui::Text("Find and replace");
+    ui::SetNextItemWidth(220.0f);
+    ui::InputText("Find", &findText_);
+    ui::SameLine();
+    ui::SetNextItemWidth(220.0f);
+    ui::InputText("Replace", &replaceText_);
+    ui::SameLine();
+    if (ui::Button("Replace all"))
+        ReplaceAll(document, findText_, replaceText_);
+    ui::EndChild();
+}
+
+void RbScriptTab::StepOverDebug(Document& document)
+{
+    if (!document.debugVm.IsDebugging())
+        return;
+    const unsigned initialDepth = document.debugVm.GetCallStack().size();
+    unsigned guard = 0;
+    do
+    {
+        if (!document.debugVm.StepDebug())
+            break;
+        if (++guard > 100000)
+            break;
+    } while (document.debugVm.IsDebugging() && document.debugVm.GetCallStack().size() > initialDepth);
+    status_ = document.debugVm.HadError() ? "rbscript step-over failed" : "rbscript step-over complete";
+}
+
+void RbScriptTab::RenderConflictDialog()
+{
+    if (conflictDialogPending_)
+    {
+        ui::OpenPopup("rbscript Conflict");
+        conflictDialogPending_ = false;
+    }
+    if (!ui::BeginPopupModal("rbscript Conflict", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        return;
+
+    ui::TextWrapped("The resource '%s' changed on disk while it has unsaved editor changes.", conflictResource_.c_str());
+    if (ui::Button("Keep mine", ImVec2{120.0f, 0.0f}))
+    {
+        conflictPending_[conflictResource_] = false;
+        diskSources_[conflictResource_] = conflictDiskSource_;
+        status_ = Format("Kept editor changes for {}", conflictResource_);
+        ui::CloseCurrentPopup();
+    }
+    ui::SameLine();
+    if (ui::Button("Use disk", ImVec2{120.0f, 0.0f}))
+    {
+        ApplySource(conflictResource_, conflictDiskSource_, autoCompile_);
+        auto iter = documents_.find(conflictResource_);
+        if (iter != documents_.end())
+            iter->second.dirty = false;
+        diskSources_[conflictResource_] = conflictDiskSource_;
+        conflictPending_[conflictResource_] = false;
+        status_ = Format("Loaded disk version of {}", conflictResource_);
+        ui::CloseCurrentPopup();
+    }
+    ui::SameLine();
+    if (ui::Button(conflictShowDiff_ ? "Hide diff" : "Show diff"))
+        conflictShowDiff_ = !conflictShowDiff_;
+    if (conflictShowDiff_)
+    {
+        const Document* document = documents_.find(conflictResource_) != documents_.end()
+            ? &documents_.find(conflictResource_)->second : nullptr;
+        ui::Separator();
+        ui::Text("Editor bytes: %u | Disk bytes: %u", document ? document->source.size() : 0, conflictDiskSource_.size());
+        if (document)
+        {
+            const unsigned common = Min(document->source.size(), conflictDiskSource_.size());
+            unsigned firstDifference = 0;
+            while (firstDifference < common && document->source[firstDifference] == conflictDiskSource_[firstDifference])
+                ++firstDifference;
+            ui::Text("First difference at byte %u", firstDifference);
+        }
+    }
+    ui::EndPopup();
+}
+
 void RbScriptTab::RenderContent()
 {
+    RenderConflictDialog();
     Document* document = GetActiveDocument();
     if (!document)
     {
@@ -503,10 +776,13 @@ void RbScriptTab::RenderContent()
     if (changed)
     {
         document->source = activeSource_;
+        document->dirty = true;
         RefreshDocument(GetActiveResourceName(), autoCompile_);
         PushSourceEdit(before, activeSource_);
     }
 
+    RenderFindReplace(*document);
+    RenderOutline(*document);
     RenderAutocomplete(*document);
     RenderTokenPreview(*document);
     RenderDiagnostics(*document);
@@ -515,6 +791,18 @@ void RbScriptTab::RenderContent()
 
 void RbScriptTab::RenderToolbar()
 {
+    static const char* templateNames[] = {"Empty", "Component", "Gameplay", "Network"};
+    ui::SetNextItemWidth(120.0f);
+    if (ui::BeginCombo("Template", templateNames[templateIndex_]))
+    {
+        for (unsigned i = 0; i < 4; ++i)
+        {
+            if (ui::Selectable(templateNames[i], i == templateIndex_))
+                templateIndex_ = i;
+        }
+        ui::EndCombo();
+    }
+    ui::SameLine();
     if (ui::Button("New rbscript"))
         CreateNewScript();
     ui::SameLine();
@@ -533,6 +821,12 @@ void RbScriptTab::RenderToolbar()
     ui::SameLine();
     ui::Checkbox("Diagnostics", &showDiagnostics_);
     ui::SameLine();
+    if (ui::Button(showOutline_ ? "Hide outline" : "Show outline"))
+        showOutline_ = !showOutline_;
+    ui::SameLine();
+    if (ui::Button("Find/Replace"))
+        showFindReplace_ = !showFindReplace_;
+    ui::SameLine();
     ui::Text("%s", status_.c_str());
 }
 
@@ -544,6 +838,8 @@ void RbScriptTab::RenderContextMenuItems()
         CompileActiveDocument();
     ui::MenuItem("Lexical preview", nullptr, &showPreview_);
     ui::MenuItem("Diagnostics", nullptr, &showDiagnostics_);
+    ui::MenuItem("Symbol outline", nullptr, &showOutline_);
+    ui::MenuItem("Find/replace", nullptr, &showFindReplace_);
 }
 
 void RbScriptTab::WriteIniSettings(ImGuiTextBuffer& output)
@@ -552,6 +848,9 @@ void RbScriptTab::WriteIniSettings(ImGuiTextBuffer& output)
     WriteStringToIni(output, "AutoCompile", Format("{}", autoCompile_ ? 1 : 0));
     WriteStringToIni(output, "Preview", Format("{}", showPreview_ ? 1 : 0));
     WriteStringToIni(output, "Diagnostics", Format("{}", showDiagnostics_ ? 1 : 0));
+    WriteStringToIni(output, "Outline", Format("{}", showOutline_ ? 1 : 0));
+    WriteStringToIni(output, "FindReplace", Format("{}", showFindReplace_ ? 1 : 0));
+    WriteStringToIni(output, "Template", Format("{}", templateIndex_));
 }
 
 void RbScriptTab::ReadIniSettings(const char* line)
@@ -563,16 +862,48 @@ void RbScriptTab::ReadIniSettings(const char* line)
         showPreview_ = ToInt(*value) != 0;
     if (const auto value = ReadStringFromIni(line, "Diagnostics"))
         showDiagnostics_ = ToInt(*value) != 0;
+    if (const auto value = ReadStringFromIni(line, "Outline"))
+        showOutline_ = ToInt(*value) != 0;
+    if (const auto value = ReadStringFromIni(line, "FindReplace"))
+        showFindReplace_ = ToInt(*value) != 0;
+    if (const auto value = ReadStringFromIni(line, "Template"))
+    {
+        const int parsedTemplate = ToInt(*value);
+        templateIndex_ = static_cast<unsigned>(parsedTemplate < 0 ? 0 : parsedTemplate > 3 ? 3 : parsedTemplate);
+    }
 }
 
 void RbScriptTab::OnResourceLoaded(const ea::string& resourceName)
 {
+    const ea::string diskSource = ReadTextFile(context_, ProjectFileName(GetProject(), resourceName));
+    auto iter = documents_.find(resourceName);
+    if (ignoreNextReload_)
+    {
+        ignoreNextReload_ = false;
+        diskSources_[resourceName] = diskSource;
+        conflictPending_[resourceName] = false;
+        return;
+    }
+
+    if (iter != documents_.end() && iter->second.dirty && diskSource != iter->second.source
+        && diskSource != diskSources_[resourceName])
+    {
+        conflictResource_ = resourceName;
+        conflictDiskSource_ = diskSource;
+        conflictPending_[resourceName] = true;
+        conflictDialogPending_ = resourceName == GetActiveResourceName();
+        status_ = Format("External rbscript change detected in {}", resourceName);
+        return;
+    }
+
     LoadDocument(resourceName);
 }
 
 void RbScriptTab::OnResourceUnloaded(const ea::string& resourceName)
 {
     documents_.erase(resourceName);
+    diskSources_.erase(resourceName);
+    conflictPending_.erase(resourceName);
     if (resourceName == GetActiveResourceName())
         activeSource_.clear();
 }

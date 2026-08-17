@@ -48,6 +48,9 @@ private:
     void RenderNodePalette();
     void RenderCanvasContextMenu();
     void RenderNodeContextMenu();
+    void RenderGraphHistory();
+    void RenderDeleteConfirmation();
+    void MergeGraphRevisions();
     void RenderLinkPreview(const ImVec2& canvasOrigin, ImDrawList* drawList);
     void RenderSelectionOverlay(const ImVec2& canvasOrigin, ImDrawList* drawList);
     void RenderMinimap(const ImVec2& canvasOrigin, const ImVec2& canvasSize);
@@ -57,6 +60,9 @@ private:
     void PerformAutoLayout();
     void SaveGraph();
     void LoadGraph();
+    void ExportGraphJson();
+    void ResetGraphView(const ImVec2& canvasSize);
+    bool NodeMatchesSearch(const BlueprintNode& node) const;
     ea::string GetGraphFileName() const;
     BlueprintNode* FindNodeAt(const Vector2& graphPosition);
     const BlueprintNode* FindNode(BlueprintId id) const;
@@ -69,6 +75,9 @@ private:
     BlueprintPin* FindPinAt(const Vector2& graphPosition, BlueprintNode*& node);
     void BeginGraphEdit();
     void CommitGraphEdit(const ea::string& status = ea::string());
+    void RecordGraphRevision(const ea::string& label, const ea::string& snapshot);
+    void RequestDeleteSelected();
+    void ConfirmDeleteSelected();
     void DeleteSelected();
     void CopySelection();
     void CutSelection();
@@ -99,6 +108,18 @@ private:
     bool graphDirty_{};
     ea::string status_;
     ea::string graphFileName_;
+    struct GraphRevision
+    {
+        ea::string label;
+        ea::string snapshot;
+        unsigned long long serial{};
+    };
+    ea::vector<GraphRevision> graphHistory_;
+    unsigned long long nextGraphRevision_{1};
+    int diffRevisionA_{-1};
+    int diffRevisionB_{-1};
+    bool deleteConfirmationPending_{};
+    ea::string deleteConfirmationText_;
     ea::string nodeSearch_;
     ea::vector<BlueprintId> searchResults_;
     ea::vector<BlueprintId> breakpoints_;
@@ -107,9 +128,11 @@ private:
     bool showComments_{true};
     bool debugPaused_{};
     bool showWatchWindow_{true};
+    bool showPinValues_{};
     bool contextMenuRequested_{};
     bool nodeContextMenuRequested_{};
     bool showTypePanels_{true};
+    bool showHistory_{};
     ea::string newStructName_;
     ea::string newEnumName_;
     ea::string newDelegateName_;
