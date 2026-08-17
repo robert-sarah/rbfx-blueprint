@@ -134,7 +134,14 @@ void SceneHierarchy::RenderToolbar(SceneViewPage& page)
     Widgets::ToolbarButton(ICON_FA_MAGNIFYING_GLASS);
     ui::EndDisabled();
 
-    ui::InputText("##Rename", &settings.filterByName_);
+    ui::SetNextItemWidth(settings.filterByName_.empty() ? -1.0f : -32.0f);
+    ui::InputText("##HierarchyFilter", &settings.filterByName_);
+    if (!settings.filterByName_.empty())
+    {
+        ui::SameLine();
+        if (Widgets::ToolbarButton(ICON_FA_XMARK, "Clear hierarchy filter"))
+            settings.filterByName_.clear();
+    }
 
     widget_->SetSettings(settings);
     owner_->SetComponentSelection(settings.showComponents_);
