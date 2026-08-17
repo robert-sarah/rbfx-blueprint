@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
 
 #include <Urho3D/Audio/AudioMixer.h>
+#include <Urho3D/Audio/AudioMixerResource.h>
 #include <Urho3D/Blueprint/BlueprintRuntime.h>
 #include <Urho3D/Particles/VFXGraph.h>
+#include <Urho3D/Particles/VFXGraphResource.h>
 #include <Urho3D/Shader/ShaderGraph.h>
 #include <Urho3D/Shader/ShaderGraphResource.h>
 
@@ -96,6 +98,43 @@ TEST_CASE("VFXGraph compiles, emits bounded particles and ribbon points", "[vfx-
     REQUIRE(graph.Stop());
 }
 
+TEST_CASE("VFXGraphResource round-trips deterministic JSON assets", "[vfx-graph][resource]")
+{
+    auto context = Tests::GetOrCreateContext(Tests::CreateCompleteContext);
+    auto resource = MakeShared<VFXGraphResource>(context);
+    VFXGraph& graph = resource->GetGraph();
+    const unsigned force = graph.AddNode("Force", VFXNodeType::Force);
+    graph.GetNode(force)->vectorValue = Vector3(0.0f, -9.8f, 0.0f);
+    graph.GetNode(force)->scalarValue = 0.5f;
+    const unsigned output = graph.AddNode("Output", VFXNodeType::Output);
+    REQUIRE(graph.SetOutputNode(output));
+    graph.SetSimulationMode(VFXSimulationMode::GPU);
+    graph.SetMaxParticles(128);
+    graph.SetSpawnRate(24.0f);
+    graph.SetParticleLifetime(3.0f);
+    graph.SetInitialVelocity(Vector3(1.0f, 2.0f, 3.0f));
+    graph.SetForce(Vector3(0.0f, -9.8f, 0.0f));
+    graph.SetDrag(0.25f);
+    graph.SetRibbonTrailLength(12);
+
+    const JSONValue serialized = resource->ToJSON();
+    CHECK(VFXGraphResource::CheckExtension("Effects/Smoke.vfxgraph"));
+    CHECK_FALSE(VFXGraphResource::CheckExtension("Effects/Smoke.xml"));
+
+    auto loaded = MakeShared<VFXGraphResource>(context);
+    ea::string error;
+    REQUIRE(loaded->FromJSON(serialized, &error));
+    CHECK(loaded->ToJSON() == serialized);
+    CHECK(loaded->GetGraph().Compile(&error));
+
+    JSONValue invalid = serialized;
+    JSONValue duplicateNodes(JSON_ARRAY);
+    duplicateNodes.Push(serialized.Get("nodes").GetArray()[0]);
+    duplicateNodes.Push(serialized.Get("nodes").GetArray()[0]);
+    invalid.Set("nodes", ea::move(duplicateNodes));
+    CHECK_FALSE(loaded->FromJSON(invalid, &error));
+}
+
 TEST_CASE("AudioMixer routes voices through hierarchical buses and meters", "[audio-mixer]")
 {
     AudioMixer mixer;
@@ -113,6 +152,36 @@ TEST_CASE("AudioMixer routes voices through hierarchical buses and meters", "[au
     REQUIRE(mixer.SetBusMuted("SFX", false));
     REQUIRE(mixer.SetBusSoloed("SFX", true));
     CHECK(mixer.GetEffectiveBusVolume("Master") == 0.0f);
+}
+
+TEST_CASE("AudioMixerResource round-trips buses effects and voices", "[audio-mixer][resource]")
+{
+    auto context = Tests::GetOrCreateContext(Tests::CreateCompleteContext);
+    auto resource = MakeShared<AudioMixerResource>(context);
+    AudioMixer& mixer = resource->GetMixer();
+    REQUIRE(mixer.AddBus({"Master", {}, 1.0f, false, false, {}}));
+    REQUIRE(mixer.AddBus({"SFX", "Master", 0.75f, false, false, {}}));
+    REQUIRE(mixer.AddEffect("SFX", {AudioDspType::Reverb, true, 0.6f, 0.2f, 0.8f}));
+    REQUIRE(mixer.AddVoice({"Explosion", "SFX", 1.2f, -0.25f, 1.1f, 0.9f, true}));
+
+    const JSONValue serialized = resource->ToJSON();
+    CHECK(AudioMixerResource::CheckExtension("Audio/Main.audiomixer"));
+    CHECK_FALSE(AudioMixerResource::CheckExtension("Audio/Main.wav"));
+
+    auto loaded = MakeShared<AudioMixerResource>(context);
+    ea::string error;
+    REQUIRE(loaded->FromJSON(serialized, &error));
+    CHECK(loaded->ToJSON() == serialized);
+    CHECK(loaded->GetMixer().GetBus("SFX")->effects.size() == 1);
+    CHECK(loaded->GetMixer().GetVoice("Explosion") != nullptr);
+
+    JSONValue invalid = serialized;
+    JSONValue invalidVoices(JSON_ARRAY);
+    JSONValue voice = serialized.Get("voices").GetArray()[0];
+    voice.Set("bus", "MissingBus");
+    invalidVoices.Push(ea::move(voice));
+    invalid.Set("voices", ea::move(invalidVoices));
+    CHECK_FALSE(loaded->FromJSON(invalid, &error));
 }
 
 TEST_CASE("Blueprint runtime exposes ShaderGraph, VFXGraph and AudioMixer nodes", "[production][blueprint]")

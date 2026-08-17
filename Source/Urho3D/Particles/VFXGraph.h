@@ -65,6 +65,8 @@ public:
     bool SetOutputNode(unsigned nodeId);
     VFXNode* GetNode(unsigned nodeId);
     const VFXNode* GetNode(unsigned nodeId) const;
+    const ea::vector<VFXNode>& GetNodes() const { return nodes_; }
+    unsigned GetOutputNodeId() const { return outputNodeId_; }
     bool Compile(ea::string* error = nullptr) const;
 
     void SetSimulationMode(VFXSimulationMode mode) { simulationMode_ = mode; }
@@ -78,6 +80,11 @@ public:
     void SetDrag(float drag);
     void SetRibbonTrailLength(unsigned points);
     unsigned GetRibbonTrailLength() const { return ribbonTrailLength_; }
+    float GetSpawnRate() const { return spawnRate_; }
+    float GetParticleLifetime() const { return particleLifetime_; }
+    const Vector3& GetInitialVelocity() const { return initialVelocity_; }
+    const Vector3& GetForce() const { return force_; }
+    float GetDrag() const { return drag_; }
 
     bool Play();
     bool Stop();

@@ -22,6 +22,7 @@
 
 #include "../Foundation/StandardFileTypes.h"
 
+#include <Urho3D/Audio/AudioMixerResource.h>
 #include <Urho3D/Audio/Sound.h>
 #include <Urho3D/Graphics/Animation.h>
 #include <Urho3D/Graphics/Material.h>
@@ -38,6 +39,7 @@
 #include <Urho3D/Resource/XMLFile.h>
 #include <Urho3D/Scene/PrefabResource.h>
 #include <Urho3D/Shader/ShaderGraphResource.h>
+#include <Urho3D/Particles/VFXGraphResource.h>
 #include <Urho3D/Scene/Scene.h>
 #include <Urho3D/Scene/SceneResource.h>
 #include <Urho3D/UI/Font.h>
@@ -67,6 +69,18 @@ void Foundation_StandardFileTypes(Context* context, Project* project)
     {
         if (desc.HasExtension({".shadergraph"}))
             desc.AddObjectType<ShaderGraphResource>();
+    });
+
+    project->AddAnalyzeFileCallback([](ResourceFileDescriptor& desc, const AnalyzeFileContext& ctx)
+    {
+        if (desc.HasExtension({".vfxgraph"}))
+            desc.AddObjectType<VFXGraphResource>();
+    });
+
+    project->AddAnalyzeFileCallback([](ResourceFileDescriptor& desc, const AnalyzeFileContext& ctx)
+    {
+        if (desc.HasExtension({".audiomixer"}))
+            desc.AddObjectType<AudioMixerResource>();
     });
 
     project->AddAnalyzeFileCallback([](ResourceFileDescriptor& desc, const AnalyzeFileContext& ctx)

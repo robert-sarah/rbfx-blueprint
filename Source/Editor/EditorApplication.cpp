@@ -6,6 +6,7 @@
 
 #include "Assets/ModelImporter.h"
 #include "Foundation/AnimationViewTab.h"
+#include "Foundation/AudioMixerTab.h"
 #include "Foundation/BlueprintTab.h"
 #include "Foundation/ConcurrentAssetProcessing.h"
 #include "Foundation/ConsoleTab.h"
@@ -103,6 +104,7 @@ EditorApplication::EditorApplication(Context* context)
     editorPluginManager_->AddPlugin("Foundation.Blueprint", &Foundation_BlueprintTab);
     editorPluginManager_->AddPlugin("Foundation.RbScript", &Foundation_RbScriptTab);
     editorPluginManager_->AddPlugin("Foundation.ShaderGraph", &Foundation_ShaderGraphTab);
+    editorPluginManager_->AddPlugin("Foundation.AudioMixer", &Foundation_AudioMixerTab);
     editorPluginManager_->AddPlugin("Foundation.ResourceBrowser", &Foundation_ResourceBrowserTab);
     editorPluginManager_->AddPlugin("Foundation.HierarchyBrowser", &Foundation_HierarchyBrowserTab);
     editorPluginManager_->AddPlugin("Foundation.Settings", &Foundation_SettingsTab);
