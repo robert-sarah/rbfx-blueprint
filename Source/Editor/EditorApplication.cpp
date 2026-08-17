@@ -9,6 +9,7 @@
 #include "Foundation/AudioMixerTab.h"
 #include "Foundation/VFXGraphTab.h"
 #include "Foundation/BlueprintTab.h"
+#include "Foundation/BuildDashboardTab.h"
 #include "Foundation/ConcurrentAssetProcessing.h"
 #include "Foundation/ConsoleTab.h"
 #include "Foundation/CommandPaletteTab.h"
@@ -109,6 +110,7 @@ EditorApplication::EditorApplication(Context* context)
     editorPluginManager_->AddPlugin("Foundation.AudioMixer", &Foundation_AudioMixerTab);
     editorPluginManager_->AddPlugin("Foundation.VFXGraph", &Foundation_VFXGraphTab);
     editorPluginManager_->AddPlugin("Foundation.Sequencer", &Foundation_SequencerTab);
+    editorPluginManager_->AddPlugin("Foundation.BuildDashboard", &Foundation_BuildDashboardTab);
     editorPluginManager_->AddPlugin("Foundation.ResourceBrowser", &Foundation_ResourceBrowserTab);
     editorPluginManager_->AddPlugin("Foundation.HierarchyBrowser", &Foundation_HierarchyBrowserTab);
     editorPluginManager_->AddPlugin("Foundation.Settings", &Foundation_SettingsTab);

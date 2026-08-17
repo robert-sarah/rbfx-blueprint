@@ -41,6 +41,7 @@
 #include <Urho3D/Shader/ShaderGraphResource.h>
 #include <Urho3D/Animation/SequencerResource.h>
 #include <Urho3D/Particles/VFXGraphResource.h>
+#include <Urho3D/WorldFabric/BuildDashboardResource.h>
 #include <Urho3D/Scene/Scene.h>
 #include <Urho3D/Scene/SceneResource.h>
 #include <Urho3D/UI/Font.h>
@@ -88,6 +89,12 @@ void Foundation_StandardFileTypes(Context* context, Project* project)
     {
         if (desc.HasExtension({".sequence", ".sequencer"}))
             desc.AddObjectType<SequencerResource>();
+    });
+
+    project->AddAnalyzeFileCallback([](ResourceFileDescriptor& desc, const AnalyzeFileContext& ctx)
+    {
+        if (desc.HasExtension({".builddashboard", ".buildgraph"}))
+            desc.AddObjectType<BuildDashboardResource>();
     });
 
     project->AddAnalyzeFileCallback([](ResourceFileDescriptor& desc, const AnalyzeFileContext& ctx)
