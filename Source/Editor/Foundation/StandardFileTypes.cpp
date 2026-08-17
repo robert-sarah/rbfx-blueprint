@@ -37,6 +37,7 @@
 #include <Urho3D/Resource/JSONFile.h>
 #include <Urho3D/Resource/XMLFile.h>
 #include <Urho3D/Scene/PrefabResource.h>
+#include <Urho3D/Shader/ShaderGraphResource.h>
 #include <Urho3D/Scene/Scene.h>
 #include <Urho3D/Scene/SceneResource.h>
 #include <Urho3D/UI/Font.h>
@@ -60,6 +61,12 @@ void Foundation_StandardFileTypes(Context* context, Project* project)
     {
         if (desc.HasExtension({".rbscript"}))
             desc.AddObjectType<RbScriptResource>();
+    });
+
+    project->AddAnalyzeFileCallback([](ResourceFileDescriptor& desc, const AnalyzeFileContext& ctx)
+    {
+        if (desc.HasExtension({".shadergraph"}))
+            desc.AddObjectType<ShaderGraphResource>();
     });
 
     project->AddAnalyzeFileCallback([](ResourceFileDescriptor& desc, const AnalyzeFileContext& ctx)

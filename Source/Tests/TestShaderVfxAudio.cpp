@@ -4,6 +4,9 @@
 #include <Urho3D/Blueprint/BlueprintRuntime.h>
 #include <Urho3D/Particles/VFXGraph.h>
 #include <Urho3D/Shader/ShaderGraph.h>
+#include <Urho3D/Shader/ShaderGraphResource.h>
+
+#include "CommonUtils.h"
 
 #include <catch2/catch_amalgamated.hpp>
 
@@ -25,6 +28,36 @@ TEST_CASE("ShaderGraph validates connections and generates GLSL and HLSL", "[sha
     CHECK(glsl.find("fragColor") != ea::string::npos);
     CHECK(hlsl.find("float4 u_Tint") != ea::string::npos);
     CHECK(hlsl.find("SV_Target") != ea::string::npos);
+}
+
+TEST_CASE("ShaderGraphResource round-trips deterministic JSON assets", "[shader-graph][resource]")
+{
+    auto context = Tests::GetOrCreateContext(Tests::CreateCompleteContext);
+    auto resource = MakeShared<ShaderGraphResource>(context);
+    auto& graph = resource->GetGraph();
+    graph.SetParameter({"Tint", ShaderGraphValueType::Color, Variant(Color::WHITE)});
+    const unsigned parameter = graph.AddNode("Tint", ShaderGraphNodeKind::Parameter, ShaderGraphValueType::Color,
+        Variant(ea::string("Tint")));
+    const unsigned output = graph.AddNode("Output", ShaderGraphNodeKind::Output, ShaderGraphValueType::Color);
+    REQUIRE(graph.Connect(parameter, "value", output, "color"));
+    REQUIRE(graph.SetOutputNode(output));
+
+    const JSONValue serialized = resource->ToJSON();
+    CHECK(ShaderGraphResource::CheckExtension("Materials/Test.shadergraph"));
+    CHECK_FALSE(ShaderGraphResource::CheckExtension("Materials/Test.material"));
+
+    auto loaded = MakeShared<ShaderGraphResource>(context);
+    ea::string error;
+    REQUIRE(loaded->FromJSON(serialized, &error));
+    CHECK(loaded->ToJSON() == serialized);
+    CHECK(loaded->GetGraph().GenerateGLSL(&error).find("fragColor") != ea::string::npos);
+
+    JSONValue invalid = serialized;
+    JSONValue duplicateConnections(JSON_ARRAY);
+    duplicateConnections.Push(serialized.Get("connections").GetArray()[0]);
+    duplicateConnections.Push(serialized.Get("connections").GetArray()[0]);
+    invalid.Set("connections", ea::move(duplicateConnections));
+    CHECK_FALSE(loaded->FromJSON(invalid, &error));
 }
 
 TEST_CASE("ShaderGraph rejects cycles and duplicate input connections", "[shader-graph]")

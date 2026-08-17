@@ -32,6 +32,7 @@
 #include "Foundation/ModelViewTab.h"
 #include "Foundation/ResourceBrowserTab.h"
 #include "Foundation/RbScriptTab.h"
+#include "Foundation/ShaderGraphTab.h"
 #include "Foundation/ResourceBrowserTab/AssetPipelineFactory.h"
 #include "Foundation/ResourceBrowserTab/MaterialFactory.h"
 #include "Foundation/ResourceBrowserTab/SceneFactory.h"
@@ -101,6 +102,7 @@ EditorApplication::EditorApplication(Context* context)
     editorPluginManager_->AddPlugin("Foundation.CommandPalette", &Foundation_CommandPaletteTab);
     editorPluginManager_->AddPlugin("Foundation.Blueprint", &Foundation_BlueprintTab);
     editorPluginManager_->AddPlugin("Foundation.RbScript", &Foundation_RbScriptTab);
+    editorPluginManager_->AddPlugin("Foundation.ShaderGraph", &Foundation_ShaderGraphTab);
     editorPluginManager_->AddPlugin("Foundation.ResourceBrowser", &Foundation_ResourceBrowserTab);
     editorPluginManager_->AddPlugin("Foundation.HierarchyBrowser", &Foundation_HierarchyBrowserTab);
     editorPluginManager_->AddPlugin("Foundation.Settings", &Foundation_SettingsTab);
