@@ -23,7 +23,9 @@
 #include "../Project/Project.h"
 
 #include "../Assets/ModelImporter.h"
+#include "../Core/EditorDesignSystem.h"
 #include "../Core/EditorPluginManager.h"
+#include "../Foundation/CommandPaletteTab.h"
 #include "../Core/IniHelpers.h"
 #include "../Core/SettingsManager.h"
 #include "../Core/UndoManager.h"
@@ -67,12 +69,64 @@ namespace
 {
 
 const auto Hotkey_SaveProject = EditorHotkey{"Global.SaveProject"}.Ctrl().Shift().Press(KEY_S);
+const auto Hotkey_CommandPalette = EditorHotkey{"Global.CommandPalette"}.Ctrl().Press(KEY_P);
 
 ImFont* monoFont = nullptr;
 
 unsigned numActiveProjects = 0;
 
 const ea::string selfIniEntry{"Project"};
+
+const char* const SceneTabId = "9f4f7432-dd60-4c83-aecd-2f6cf69d3549";
+const char* const HierarchyTabId = "38ee90af-0a65-4d7d-93e2-d446ae54dffd";
+const char* const InspectorTabId = "bd959865-8929-4f92-a20f-97ff867d6ba6";
+const char* const ResourcesTabId = "96c69b8e-ee83-43de-885c-8a51cef65d59";
+const char* const BlueprintTabId = "7fef95f7-42da-4ad1-9a32-3a7e9c1cc101";
+const char* const RbScriptTabId = "4e4bd5ec-5085-4f88-89f8-2fbead3c7a9f";
+const char* const ConsoleTabId = "2c1b8e59-3e21-4a14-bc20-d35af0ba5031";
+const char* const GameTabId = "212a6577-8a2a-42d6-aaed-042d226c724c";
+
+bool IsWorkspaceTab(EditorWorkspace workspace, const ea::string& id)
+{
+    if (workspace == EditorWorkspace::Layout)
+        return true;
+
+    const auto isAnyOf = [&](std::initializer_list<const char*> ids)
+    {
+        for (const char* candidate : ids)
+        {
+            if (id == candidate)
+                return true;
+        }
+        return false;
+    };
+
+    switch (workspace)
+    {
+    case EditorWorkspace::Scene2D:
+    case EditorWorkspace::Scene3D:
+        return isAnyOf({SceneTabId, HierarchyTabId, InspectorTabId, ResourcesTabId, ConsoleTabId, GameTabId});
+    case EditorWorkspace::Blueprint:
+        return isAnyOf({BlueprintTabId, HierarchyTabId, InspectorTabId, ResourcesTabId, ConsoleTabId});
+    case EditorWorkspace::Scripting:
+        return isAnyOf({RbScriptTabId, HierarchyTabId, InspectorTabId, ResourcesTabId, ConsoleTabId});
+    case EditorWorkspace::Animation:
+        return isAnyOf({"Animation", SceneTabId, HierarchyTabId, InspectorTabId, ResourcesTabId, ConsoleTabId});
+    case EditorWorkspace::Rendering:
+        return isAnyOf({SceneTabId, InspectorTabId, ResourcesTabId, ConsoleTabId});
+    case EditorWorkspace::Audio:
+        return isAnyOf({ResourcesTabId, ConsoleTabId});
+    case EditorWorkspace::Profiling:
+        return isAnyOf({GameTabId, ConsoleTabId});
+    case EditorWorkspace::WorldFabric:
+        return isAnyOf({ResourcesTabId, HierarchyTabId, InspectorTabId, ConsoleTabId});
+    case EditorWorkspace::Build:
+        return isAnyOf({ResourcesTabId, ConsoleTabId});
+    case EditorWorkspace::Layout:
+    default:
+        return true;
+    }
+}
 
 std::regex PatternToRegex(const ea::string& pattern)
 {
@@ -553,6 +607,13 @@ TemporaryDir Project::CreateTemporaryDir()
 void Project::InitializeHotkeys()
 {
     hotkeyManager_->BindHotkey(this, Hotkey_SaveProject, &Project::Save);
+    hotkeyManager_->BindHotkey(this, Hotkey_CommandPalette, &Project::OpenCommandPalette);
+}
+
+void Project::OpenCommandPalette()
+{
+    if (auto palette = FindTab<CommandPaletteTab>())
+        palette->OpenPalette();
 }
 
 void Project::EnsureDirectoryInitialized()
@@ -687,10 +748,14 @@ void Project::ResetLayout()
     ui::DockBuilderAddNode(dockspaceId_, 0);
     ui::DockBuilderSetNodeSize(dockspaceId_, ui::GetMainViewport()->Size);
 
+    const float leftRatio = activeWorkspace_ == EditorWorkspace::Blueprint ? 0.16f : 0.20f;
+    const float rightRatio = activeWorkspace_ == EditorWorkspace::Scripting ? 0.34f : 0.30f;
+    const float bottomRatio = activeWorkspace_ == EditorWorkspace::Profiling ? 0.38f : 0.30f;
+
     ImGuiID dockCenter = dockspaceId_;
-    ImGuiID dockLeft = ui::DockBuilderSplitNode(dockCenter, ImGuiDir_Left, 0.20f, nullptr, &dockCenter);
-    ImGuiID dockRight = ui::DockBuilderSplitNode(dockCenter, ImGuiDir_Right, 0.30f, nullptr, &dockCenter);
-    ImGuiID dockBottom = ui::DockBuilderSplitNode(dockCenter, ImGuiDir_Down, 0.30f, nullptr, &dockCenter);
+    ImGuiID dockLeft = ui::DockBuilderSplitNode(dockCenter, ImGuiDir_Left, leftRatio, nullptr, &dockCenter);
+    ImGuiID dockRight = ui::DockBuilderSplitNode(dockCenter, ImGuiDir_Right, rightRatio, nullptr, &dockCenter);
+    ImGuiID dockBottom = ui::DockBuilderSplitNode(dockCenter, ImGuiDir_Down, bottomRatio, nullptr, &dockCenter);
 
     for (EditorTab* tab : tabs_)
     {
@@ -714,9 +779,42 @@ void Project::ResetLayout()
 
     for (EditorTab* tab : tabs_)
     {
-        if (tab->GetFlags().Test(EditorTabFlag::OpenByDefault))
+        const bool isDefault = tab->GetFlags().Test(EditorTabFlag::OpenByDefault);
+        const bool isRelevant = IsWorkspaceTab(activeWorkspace_, tab->GetUniqueId());
+        if (isRelevant && isDefault)
             tab->Open();
+        else if (!isRelevant && isDefault)
+            tab->Close();
     }
+}
+
+void Project::SetWorkspace(EditorWorkspace workspace)
+{
+    if (activeWorkspace_ == workspace)
+        return;
+
+    activeWorkspace_ = workspace;
+    pendingResetLayout_ = true;
+
+    for (EditorTab* tab : tabs_)
+    {
+        if (tab->GetFlags().Test(EditorTabFlag::OpenByDefault))
+        {
+            if (IsWorkspaceTab(activeWorkspace_, tab->GetUniqueId()))
+                tab->Open();
+            else
+                tab->Close();
+        }
+    }
+}
+
+void Project::SetEditorTheme(EditorTheme theme)
+{
+    if (editorTheme_ == theme)
+        return;
+
+    editorTheme_ = theme;
+    ApplyEditorStyle(editorTheme_);
 }
 
 void Project::ApplyPlugins()
@@ -938,6 +1036,7 @@ void Project::RenderToolbar()
     if (focusedRootTab_)
         focusedRootTab_->RenderToolbar();
 
+    RenderWorkspaceToolbar();
     RenderAssetsToolbar();
     RenderPluginReloadToolbar();
     RenderSavePendingToolbar();
@@ -996,6 +1095,26 @@ void Project::RenderSavePendingToolbar()
     ui::Text(ICON_FA_FLOPPY_DISK " Save in progress...");
 }
 
+void Project::RenderWorkspaceToolbar()
+{
+    Widgets::ToolbarSeparator();
+    ui::SetNextItemWidth(150.0f);
+    if (ui::BeginCombo("##ActiveWorkspace", GetEditorWorkspaceName(activeWorkspace_)))
+    {
+        for (const EditorWorkspacePreset& preset : GetEditorWorkspacePresets())
+        {
+            const bool selected = activeWorkspace_ == preset.id_;
+            if (ui::Selectable(preset.name_, selected))
+                SetWorkspace(preset.id_);
+            if (selected)
+                ui::SetItemDefaultFocus();
+            if (ui::IsItemHovered())
+                ui::SetTooltip("%s", preset.description_);
+        }
+        ui::EndCombo();
+    }
+}
+
 void Project::RenderProjectMenu()
 {
     if (ui::MenuItem(ICON_FA_FLOPPY_DISK " Save Project", hotkeyManager_->GetHotkeyLabel(Hotkey_SaveProject).c_str()))
@@ -1029,6 +1148,42 @@ void Project::RenderMainMenu()
         }
         ui::EndMenu();
     }
+
+    if (ui::BeginMenu("Workspace"))
+    {
+        RenderWorkspaceMenu();
+        ui::EndMenu();
+    }
+
+    if (ui::MenuItem("Command Palette", "Ctrl+P"))
+        OpenCommandPalette();
+}
+
+void Project::RenderWorkspaceMenu()
+{
+    for (const EditorWorkspacePreset& preset : GetEditorWorkspacePresets())
+    {
+        if (ui::MenuItem(preset.name_, nullptr, activeWorkspace_ == preset.id_))
+            SetWorkspace(preset.id_);
+        if (ui::IsItemHovered())
+            ui::SetTooltip("%s", preset.description_);
+    }
+
+    ui::Separator();
+    if (ui::BeginMenu("Theme"))
+    {
+        const EditorTheme themes[] = {EditorTheme::Dark, EditorTheme::Light, EditorTheme::HighContrast};
+        for (EditorTheme theme : themes)
+        {
+            if (ui::MenuItem(GetEditorThemeName(theme), nullptr, editorTheme_ == theme))
+                SetEditorTheme(theme);
+        }
+        ui::EndMenu();
+    }
+
+    ui::Separator();
+    if (ui::MenuItem("Reset Workspace Layout"))
+        pendingResetLayout_ = true;
 }
 
 void Project::SaveShallowOnly()
@@ -1088,6 +1243,13 @@ void Project::ReadIniSettings(const char* entry, const char* line)
     {
         if (const auto value = ReadStringFromIni(line, "LaunchConfiguration"))
             currentLaunchConfiguration_ = *value;
+        if (const auto value = ReadStringFromIni(line, "Workspace"))
+            activeWorkspace_ = ParseEditorWorkspace(*value);
+        if (const auto value = ReadStringFromIni(line, "Theme"))
+        {
+            editorTheme_ = ParseEditorTheme(*value);
+            ApplyEditorStyle(editorTheme_);
+        }
     }
 
     for (EditorTab* tab : tabs_)
@@ -1101,6 +1263,8 @@ void Project::WriteIniSettings(ImGuiTextBuffer& output)
 {
     output.appendf("\n[Project][%s]\n", selfIniEntry.c_str());
     WriteStringToIni(output, "LaunchConfiguration", currentLaunchConfiguration_);
+    WriteStringToIni(output, "Workspace", GetEditorWorkspaceId(activeWorkspace_));
+    WriteStringToIni(output, "Theme", GetEditorThemeId(editorTheme_));
 
     for (EditorTab* tab : tabs_)
     {

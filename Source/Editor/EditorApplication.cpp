@@ -9,6 +9,7 @@
 #include "Foundation/BlueprintTab.h"
 #include "Foundation/ConcurrentAssetProcessing.h"
 #include "Foundation/ConsoleTab.h"
+#include "Foundation/CommandPaletteTab.h"
 #include "Foundation/GameViewTab.h"
 #include "Foundation/Glue/ProjectGlue.h"
 #include "Foundation/Glue/ResourceBrowserGlue.h"
@@ -97,6 +98,7 @@ EditorApplication::EditorApplication(Context* context)
     editorPluginManager_->AddPlugin("Foundation.ModelView", &Foundation_ModelViewTab);
     editorPluginManager_->AddPlugin("Foundation.AnimationView", &Foundation_AnimationViewTab);
     editorPluginManager_->AddPlugin("Foundation.Console", &Foundation_ConsoleTab);
+    editorPluginManager_->AddPlugin("Foundation.CommandPalette", &Foundation_CommandPaletteTab);
     editorPluginManager_->AddPlugin("Foundation.Blueprint", &Foundation_BlueprintTab);
     editorPluginManager_->AddPlugin("Foundation.RbScript", &Foundation_RbScriptTab);
     editorPluginManager_->AddPlugin("Foundation.ResourceBrowser", &Foundation_ResourceBrowserTab);

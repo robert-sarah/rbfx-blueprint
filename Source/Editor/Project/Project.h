@@ -27,6 +27,8 @@
 #include "../Project/LaunchManager.h"
 #include "../Project/ProjectRequest.h"
 #include "../Project/ToolManager.h"
+#include "../Core/EditorDesignSystem.h"
+#include "../Core/EditorWorkspace.h"
 
 #include <Urho3D/IO/MountPoint.h>
 #include <Urho3D/Core/Object.h>
@@ -52,8 +54,9 @@ namespace Urho3D
 
 class AssetManager;
 class HotkeyManager;
-class SettingsManager;
+class ToolManager;
 class UndoManager;
+class CommandPaletteTab;
 
 /// Project configuration flags.
 enum class ProjectFlag
@@ -189,6 +192,14 @@ public:
     /// Return whether the project itself has unsaved changes.
     bool HasUnsavedChanges() const { return hasUnsavedChanges_; }
 
+    /// Select the active editor workspace. The change is persisted in the project UI INI.
+    void SetWorkspace(EditorWorkspace workspace);
+    EditorWorkspace GetWorkspace() const { return activeWorkspace_; }
+    /// Select the editor theme. The change is persisted in the project UI INI.
+    void SetEditorTheme(EditorTheme theme);
+    EditorTheme GetEditorTheme() const { return editorTheme_; }
+    void OpenCommandPalette();
+
     /// Commands
     /// @{
     void SaveShallowOnly();
@@ -272,6 +283,8 @@ private:
     void RenderAssetsToolbar();
     void RenderPluginReloadToolbar();
     void RenderSavePendingToolbar();
+    void RenderWorkspaceMenu();
+    void RenderWorkspaceToolbar();
 
     /// Project properties
     /// @{
@@ -339,6 +352,8 @@ private:
     /// UI state
     /// @{
     bool pendingResetLayout_{};
+    EditorWorkspace activeWorkspace_{EditorWorkspace::Layout};
+    EditorTheme editorTheme_{EditorTheme::Dark};
     ImGuiID dockspaceId_{};
     WeakPtr<EditorTab> focusedTab_;
     WeakPtr<EditorTab> focusedRootTab_;
