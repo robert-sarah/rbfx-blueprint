@@ -108,6 +108,7 @@ private:
     WeakSerializableVector objects_;
     ea::vector<ea::pair<const AttributeInfo*, Variant>> pendingSetAttributes_;
     ea::vector<const AttributeInfo*> pendingActions_;
+    ea::string attributeFilter_;
 };
 
 template <class T>

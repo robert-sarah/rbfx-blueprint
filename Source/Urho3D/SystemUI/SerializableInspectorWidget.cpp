@@ -31,6 +31,8 @@
 
 #include <IconFontCppHeaders/IconsFontAwesome6.h>
 
+#include <cctype>
+
 namespace Urho3D
 {
 
@@ -39,6 +41,15 @@ namespace
 
 ea::unordered_map<AttributeHookKey, AttributeHookFunction> attributeHooks;
 ea::unordered_map<ObjectHookKey, ObjectHookFunction> objectHooks;
+
+ea::string ToAttributeSearchKey(const ea::string& value)
+{
+    ea::string result;
+    result.reserve(value.size());
+    for (const char character : value)
+        result += static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+    return result;
+}
 
 }
 
@@ -182,11 +193,20 @@ void SerializableInspectorWidget::RenderObjects()
     if (!attributes)
         return;
 
+    ui::AlignTextToFramePadding();
+    ui::TextUnformatted(ICON_FA_FILTER);
+    ui::SameLine();
+    ui::SetNextItemWidth(-1.0f);
+    ui::InputText("##SerializableInspectorFilter", &attributeFilter_);
+
+    const ea::string filterKey = ToAttributeSearchKey(attributeFilter_);
     pendingSetAttributes_.clear();
     pendingActions_.clear();
     for (const AttributeInfo& info : *attributes)
     {
         if (info.mode_ & AM_NOEDIT)
+            continue;
+        if (!filterKey.empty() && ToAttributeSearchKey(info.name_).find(filterKey) == ea::string::npos)
             continue;
 
         const IdScopeGuard guard{info.name_.c_str()};
