@@ -9,6 +9,7 @@
 #include "../Project/Project.h"
 
 #include <Urho3D/Core/StringUtils.h>
+#include <Urho3D/Core/EditorUIContracts.h>
 #include <Urho3D/IO/ArchiveSerialization.h>
 #include <Urho3D/IO/File.h>
 #include <Urho3D/IO/FileSystem.h>
@@ -95,12 +96,6 @@ ea::string EnsureTrailingSlash(ea::string path)
     if (!path.ends_with("/"))
         path += "/";
     return path;
-}
-
-bool IsSafeRelativePath(const ea::string& path)
-{
-    return !path.empty() && path.find("..") == ea::string::npos && !path.starts_with("/")
-        && path.find('\\') == ea::string::npos;
 }
 
 } // namespace
@@ -307,6 +302,13 @@ void EditorAutosave::RefreshSnapshots()
         if (!manifest.LoadFile(manifestName) || !manifest.GetRoot().IsObject())
             continue;
 
+        ea::string manifestError;
+        if (!ValidateEditorAutosaveManifest(manifest.GetRoot(), &manifestError))
+        {
+            URHO3D_LOGWARNING("Ignoring invalid editor autosave manifest {}: {}", manifestName, manifestError);
+            continue;
+        }
+
         const JSONValue& rootValue = manifest.GetRoot();
         EditorAutosaveSnapshot snapshot;
         snapshot.directory_ = directory;
@@ -384,6 +386,13 @@ bool EditorAutosave::RestoreSelectedSnapshot()
     if (!manifest.LoadFile(manifestName) || !manifest.GetRoot().IsObject())
         return false;
 
+    ea::string manifestError;
+    if (!ValidateEditorAutosaveManifest(manifest.GetRoot(), &manifestError))
+    {
+        URHO3D_LOGWARNING("Cannot restore invalid editor autosave manifest {}: {}", manifestName, manifestError);
+        return false;
+    }
+
     const JSONValue& files = manifest.GetRoot().Get("Files");
     if (!files.IsArray())
         return false;
@@ -393,7 +402,7 @@ bool EditorAutosave::RestoreSelectedSnapshot()
     bool restoredAny = false;
     for (const JSONValue& file : files.GetArray())
     {
-        if (!file.IsString() || !IsSafeRelativePath(file.GetString()))
+        if (!file.IsString() || !IsSafeEditorAutosavePath(file.GetString()))
             continue;
 
         const ea::string relativeName = file.GetString();

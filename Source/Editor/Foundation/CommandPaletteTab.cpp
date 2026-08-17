@@ -7,6 +7,7 @@
 #include "../Project/Project.h"
 
 #include <Urho3D/Core/StringUtils.h>
+#include <Urho3D/Core/EditorUIContracts.h>
 #include <Urho3D/SystemUI/SystemUI.h>
 
 #include <IconFontCppHeaders/IconsFontAwesome6.h>
@@ -24,25 +25,6 @@ ea::vector<CommandPaletteCommand>& GetCommands()
 {
     static ea::vector<CommandPaletteCommand> commands;
     return commands;
-}
-
-bool ContainsFuzzy(const ea::string& text, const ea::string& query)
-{
-    if (query.empty())
-        return true;
-
-    size_t queryIndex = 0;
-    for (char character : text)
-    {
-        if (std::tolower(static_cast<unsigned char>(character)) ==
-            std::tolower(static_cast<unsigned char>(query[queryIndex])))
-        {
-            ++queryIndex;
-            if (queryIndex == query.size())
-                return true;
-        }
-    }
-    return false;
 }
 
 ea::string JoinRecent(const ea::vector<ea::string>& values)
@@ -262,32 +244,13 @@ void CommandPaletteTab::RebuildResults()
 
 bool CommandPaletteTab::MatchesQuery(const CommandPaletteCommand& command, const ea::string& query)
 {
-    return ContainsFuzzy(command.label_, query) || ContainsFuzzy(command.category_, query) || ContainsFuzzy(command.id_, query);
+    return MatchEditorFuzzyText(command.label_, query) || MatchEditorFuzzyText(command.category_, query)
+        || MatchEditorFuzzyText(command.id_, query);
 }
 
 int CommandPaletteTab::ScoreMatch(const ea::string& text, const ea::string& query)
 {
-    if (query.empty())
-        return 0;
-
-    int score = 0;
-    size_t queryIndex = 0;
-    bool contiguous = true;
-    for (char character : text)
-    {
-        if (queryIndex >= query.size())
-            break;
-        if (std::tolower(static_cast<unsigned char>(character)) ==
-            std::tolower(static_cast<unsigned char>(query[queryIndex])))
-        {
-            score += contiguous ? 3 : 1;
-            contiguous = true;
-            ++queryIndex;
-        }
-        else
-            contiguous = false;
-    }
-    return queryIndex == query.size() ? score : -1;
+    return ScoreEditorFuzzyText(text, query);
 }
 
 void CommandPaletteTab::WriteIniSettings(ImGuiTextBuffer& output)

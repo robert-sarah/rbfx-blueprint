@@ -23,13 +23,12 @@
 #include "../Core/IniHelpers.h"
 #include "../Foundation/ResourceBrowserTab.h"
 
+#include <Urho3D/Core/EditorUIContracts.h>
 #include <Urho3D/IO/File.h>
 #include <Urho3D/IO/FileSystem.h>
 
 #include <EASTL/sort.h>
 #include <EASTL/tuple.h>
-
-#include <cctype>
 
 #include <IconFontCppHeaders/IconsFontAwesome6.h>
 
@@ -63,23 +62,12 @@ bool IsPayloadMovable(const ResourceDragDropPayload& payload)
         [](const ResourceFileDescriptor& desc) { return !desc.isAutomatic_; });
 }
 
-ea::string ToSearchKey(const ea::string& value)
-{
-    ea::string result;
-    result.reserve(value.size());
-    for (const char character : value)
-        result += static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
-    return result;
-}
-
 bool SearchMatchesEntry(const FileSystemEntry& entry, const ea::string& query)
 {
     if (query.empty())
         return true;
 
-    const ea::string searchKey = ToSearchKey(query);
-    if (ToSearchKey(entry.localName_).find(searchKey) != ea::string::npos
-        || ToSearchKey(entry.resourceName_).find(searchKey) != ea::string::npos)
+    if (MatchEditorTextFilter(entry.localName_, query) || MatchEditorTextFilter(entry.resourceName_, query))
     {
         return true;
     }
@@ -784,8 +772,8 @@ void ResourceBrowserTab::RenderCompositeFileEntry(const FileSystemEntry& entry, 
 {
     const auto project = GetProject();
     if (IsFileNameIgnored(entry, project, localResourceName)
-        || (!searchQuery_.empty() && ToSearchKey(localResourceName).find(ToSearchKey(searchQuery_)) == ea::string::npos
-            && ToSearchKey(entry.resourceName_).find(ToSearchKey(searchQuery_)) == ea::string::npos))
+        || (!searchQuery_.empty() && !MatchEditorTextFilter(localResourceName, searchQuery_)
+            && !MatchEditorTextFilter(entry.resourceName_, searchQuery_)))
     {
         return;
     }
