@@ -4,7 +4,11 @@
 #include <Urho3D/Animation/AnimationMontage.h>
 #include <Urho3D/Animation/AnimationRetargeter.h>
 #include <Urho3D/Animation/AnimationStateMachine.h>
+#include "CommonUtils.h"
+
 #include <Urho3D/Animation/Sequencer.h>
+#include <Urho3D/Animation/SequencerResource.h>
+#include <Urho3D/IO/VectorBuffer.h>
 #include <Urho3D/Blueprint/BlueprintRuntime.h>
 
 #include <catch2/catch_amalgamated.hpp>
@@ -114,6 +118,69 @@ TEST_CASE("Sequencer interpolates tracks and emits cinematic events", "[animatio
     REQUIRE(events.size() == 1);
     CHECK(events.front().track == "Events");
     CHECK(events.front().value.GetString() == "Shot");
+}
+
+TEST_CASE("Sequencer resource round-trips cinematic manifests and validates extensions", "[animation][sequencer][resource]")
+{
+    const auto context = Tests::GetOrCreateContext(Tests::CreateCompleteContext);
+    SequencerResource source(context.Get());
+    Sequencer& sequencer = source.GetSequencer();
+    sequencer.SetDuration(12.0f);
+    sequencer.SetLooping(true);
+    REQUIRE(sequencer.AddTrack("Camera", SequencerTrackType::Transform));
+    REQUIRE(sequencer.AddTrack("Dialogue", SequencerTrackType::Event));
+    REQUIRE(sequencer.GetTrack("Dialogue") != nullptr);
+    sequencer.GetTrack("Dialogue")->muted = true;
+    REQUIRE(sequencer.AddKeyframe("Camera", {0.0f, Variant(Vector3(0.0f, 1.0f, 2.0f))}));
+    REQUIRE(sequencer.AddKeyframe("Camera", {6.0f, Variant(Vector3(4.0f, 3.0f, 8.0f))}));
+    REQUIRE(sequencer.AddKeyframe("Dialogue", {3.5f, Variant(ea::string("Hello"))}));
+
+    const JSONValue serialized = source.ToJSON();
+    SequencerResource restored(context.Get());
+    ea::string error;
+    REQUIRE(restored.FromJSON(serialized, &error));
+    CHECK(error.empty());
+    CHECK(restored.GetSequencer().GetDuration() == Catch::Approx(12.0f));
+    CHECK(restored.GetSequencer().IsLooping());
+    REQUIRE(restored.GetSequencer().GetTracks().size() == 2);
+    const SequencerTrack* restoredDialogue = restored.GetSequencer().GetTrack("Dialogue");
+    REQUIRE(restoredDialogue != nullptr);
+    CHECK(restoredDialogue->muted);
+    REQUIRE(restoredDialogue->keyframes.size() == 1);
+    CHECK(restoredDialogue->keyframes.front().value.GetString() == "Hello");
+    CHECK(restored.GetSequencer().Evaluate("Camera", 3.0f).GetVector3().x_ == Catch::Approx(2.0f));
+
+    VectorBuffer buffer;
+    buffer.SetName("Memory.sequence");
+    REQUIRE(source.Save(buffer));
+    REQUIRE(buffer.GetSize() > 0);
+    buffer.Seek(0);
+    SequencerResource loaded(context.Get());
+    REQUIRE(loaded.BeginLoad(buffer));
+    CHECK(loaded.GetSequencer().GetTracks().size() == 2);
+
+    CHECK(SequencerResource::CheckExtension("cinematic.sequence"));
+    CHECK(SequencerResource::CheckExtension("cinematic.sequencer"));
+    CHECK_FALSE(SequencerResource::CheckExtension("cinematic.json"));
+    CHECK_FALSE(SequencerResource::CheckExtension("cinematic.sequence.bak"));
+
+    JSONValue missingTracks = serialized;
+    missingTracks.Erase("tracks");
+    REQUIRE_FALSE(restored.FromJSON(missingTracks, &error));
+    CHECK_FALSE(error.empty());
+
+    JSONValue invalidDuration = serialized;
+    invalidDuration["duration"] = JSONValue(-1.0f);
+    REQUIRE_FALSE(restored.FromJSON(invalidDuration, &error));
+    CHECK_FALSE(error.empty());
+
+    JSONValue duplicateTrack = serialized;
+    JSONValue tracks = duplicateTrack["tracks"];
+    REQUIRE(tracks.Size() == 2);
+    tracks.Push(tracks[0]);
+    duplicateTrack["tracks"] = tracks;
+    REQUIRE_FALSE(restored.FromJSON(duplicateTrack, &error));
+    CHECK_FALSE(error.empty());
 }
 
 TEST_CASE("Blueprint runtime exposes native animation and sequencer nodes", "[animation][blueprint]")
