@@ -173,7 +173,7 @@ inline T SmoothStep(T lhs, T rhs, T t)
 }
 
 /// Calculate exponential decay function.
-template <class T> inline T ExponentialDecay(T x) { return Clamp(pow(T(2), -x), T(0), T(1)); }
+template <class T> inline T ExponentialDecay(T x) { return Clamp(std::pow(T(2), -x), T(0), T(1)); }
 template <class T> inline T InverseExponentialDecay(T x) { return T(1) - ExponentialDecay(x); }
 
 /// Apply exponential smoothing to raw value. Typical usage:

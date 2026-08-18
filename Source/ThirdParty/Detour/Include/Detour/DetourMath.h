@@ -7,6 +7,7 @@ Members in this module are wrappers around the standard math library
 #ifndef DETOURMATH_H
 #define DETOURMATH_H
 
+#include <cmath>
 #include <math.h>
 
 inline float dtMathFabsf(float x) { return fabsf(x); }
@@ -19,7 +20,7 @@ inline float dtMathAtan2f(float y, float x) { return atan2f(y, x); }
 inline bool dtMathIsfinite(float x)
 {
 #ifndef RC_FAST_MATH
-	return isfinite(x);
+	return std::isfinite(x);
 #else
 	// Infinity and NaN are disabled when compiling with -ffast-math
 	(void)x;
