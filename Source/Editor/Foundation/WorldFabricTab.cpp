@@ -381,6 +381,70 @@ void WorldFabricTab::RenderBuildOrder(const WorldFabricGraphResource& resource)
     }
 }
 
+void WorldFabricTab::RenderImpactAnalysis(const WorldFabricGraphResource& resource)
+{
+    const WorldFabricNode* root = FindNode(resource, selectedNodeKey_);
+    ui::Separator();
+    ui::Text("Impact Analysis");
+    if (!root)
+    {
+        ui::TextUnformatted("Select a node to compute its transitive impact.");
+        return;
+    }
+
+    ea::vector<WorldFabricId> impacted;
+    impacted.push_back(root->id);
+    for (unsigned index = 0; index < impacted.size(); ++index)
+    {
+        const ea::vector<WorldFabricDependency> dependents = resource.GetGraph().GetDependents(impacted[index]);
+        for (const WorldFabricDependency& edge : dependents)
+        {
+            if (ea::find(impacted.begin(), impacted.end(), edge.node) == impacted.end())
+                impacted.push_back(edge.node);
+        }
+    }
+
+    ui::Text("Root: %s | Affected nodes: %u", root->key.c_str(), impacted.size());
+    for (unsigned index = 0; index < impacted.size(); ++index)
+    {
+        const WorldFabricNode* node = resource.GetGraph().GetNode(impacted[index]);
+        if (node)
+            ui::BulletText("%u. %s (%s)", index + 1, node->key.c_str(), WorldFabricGraphResource::GetNodeKindName(node->kind));
+    }
+}
+
+void WorldFabricTab::RenderSemanticQuery(const WorldFabricGraphResource& resource)
+{
+    ui::Separator();
+    ui::Text("Semantic Query");
+    ui::InputText("Key, type or metadata substring", &semanticQuery_);
+    unsigned matches = 0;
+    for (const WorldFabricNode& node : resource.GetGraph().GetNodes())
+    {
+        bool match = semanticQuery_.empty() || node.key.find(semanticQuery_) != ea::string::npos
+            || node.type.find(semanticQuery_) != ea::string::npos;
+        if (!match)
+        {
+            for (const auto& metadata : node.metadata)
+            {
+                if (metadata.first.find(semanticQuery_) != ea::string::npos
+                    || metadata.second.ToString().find(semanticQuery_) != ea::string::npos)
+                {
+                    match = true;
+                    break;
+                }
+            }
+        }
+        if (match)
+        {
+            ++matches;
+            if (ui::Selectable(Format("{} | {}##query", node.key, node.type).c_str(), selectedNodeKey_ == node.key))
+                selectedNodeKey_ = node.key;
+        }
+    }
+    ui::Text("Matches: %u", matches);
+}
+
 void WorldFabricTab::RenderContent()
 {
     WorldFabricGraphResource& resource = GetWorldFabric();
@@ -401,6 +465,8 @@ void WorldFabricTab::RenderContent()
 
     ui::Separator();
     RenderBuildOrder(resource);
+    RenderImpactAnalysis(resource);
+    RenderSemanticQuery(resource);
     if (!validationError_.empty())
         ui::TextColored(ImVec4(1.0f, 0.35f, 0.25f, 1.0f), "Error: %s", validationError_.c_str());
 }

@@ -51,6 +51,8 @@ private:
     void RenderNodeInspector(WorldFabricGraphResource& resource);
     void RenderDependencies(WorldFabricGraphResource& resource);
     void RenderBuildOrder(const WorldFabricGraphResource& resource);
+    void RenderImpactAnalysis(const WorldFabricGraphResource& resource);
+    void RenderSemanticQuery(const WorldFabricGraphResource& resource);
 
     SharedPtr<WorldFabricGraphResource> resource_;
     WorldFabricGraphResource preview_;
@@ -65,6 +67,7 @@ private:
     unsigned dependencyKind_{static_cast<unsigned>(WorldFabricDependencyKind::Requires)};
     ea::string status_;
     ea::string validationError_;
+    ea::string semanticQuery_;
 };
 
 } // namespace Urho3D
