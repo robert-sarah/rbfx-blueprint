@@ -6,7 +6,6 @@
 #include <Urho3D/Core/StringUtils.h>
 
 #include <algorithm>
-#include <cstdio>
 
 namespace Urho3D
 {
@@ -41,9 +40,7 @@ unsigned long long HashText(const ea::string& text)
 
 GameplayTestHarness::GameplayTestHarness()
 {
-    std::fprintf(stderr, "harness: constructor begin\\n");
     impl_ = std::make_unique<Impl>();
-    std::fprintf(stderr, "harness: constructor end\\n");
 }
 
 GameplayTestHarness::~GameplayTestHarness() = default;
