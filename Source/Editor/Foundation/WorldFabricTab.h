@@ -3,6 +3,7 @@
 #include "../Project/ResourceEditorTab.h"
 
 #include <Urho3D/WorldFabric/WorldFabricGraphResource.h>
+#include <Urho3D/WorldFabric/WorldFabricProfiler.h>
 
 namespace Urho3D
 {
@@ -53,6 +54,7 @@ private:
     void RenderBuildOrder(const WorldFabricGraphResource& resource);
     void RenderImpactAnalysis(const WorldFabricGraphResource& resource);
     void RenderSemanticQuery(const WorldFabricGraphResource& resource);
+    void RenderProfiler(const WorldFabricGraphResource& resource);
 
     SharedPtr<WorldFabricGraphResource> resource_;
     WorldFabricGraphResource preview_;
@@ -68,6 +70,7 @@ private:
     ea::string status_;
     ea::string validationError_;
     ea::string semanticQuery_;
+    WorldFabricProfiler profiler_;
 };
 
 } // namespace Urho3D

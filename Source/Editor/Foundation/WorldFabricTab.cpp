@@ -445,6 +445,55 @@ void WorldFabricTab::RenderSemanticQuery(const WorldFabricGraphResource& resourc
     ui::Text("Matches: %u", matches);
 }
 
+void WorldFabricTab::RenderProfiler(const WorldFabricGraphResource& resource)
+{
+    profiler_.SetGraph(&GetWorldFabric().GetGraph());
+    ui::Separator();
+    ui::Text("Correlated World Fabric Profiler");
+    ui::Text("Digest: %llu | Samples: %u", profiler_.ComputeDigest(), profiler_.GetAllNodeStats().size());
+    if (ui::Button("Reset Correlated Stats"))
+    {
+        profiler_.Reset();
+        status_ = "World Fabric profiler statistics reset";
+    }
+
+    const ea::vector<WorldFabricNodeProfile> profiles = profiler_.GetAllNodeStats();
+    if (profiles.empty())
+    {
+        ui::TextUnformatted("No runtime annotations have been recorded for this graph.");
+        return;
+    }
+    if (ui::BeginTable("WorldFabricProfiles", 6, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV
+            | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY, ImVec2(0, 220)))
+    {
+        ui::TableSetupColumn("Node");
+        ui::TableSetupColumn("Channel");
+        ui::TableSetupColumn("Calls");
+        ui::TableSetupColumn("Average ms");
+        ui::TableSetupColumn("Min ms");
+        ui::TableSetupColumn("Max ms");
+        ui::TableHeadersRow();
+        for (const WorldFabricNodeProfile& profile : profiles)
+        {
+            const WorldFabricNode* node = resource.GetGraph().GetNode(profile.node);
+            ui::TableNextRow();
+            ui::TableSetColumnIndex(0);
+            ui::TextUnformatted(node ? node->key.c_str() : profile.key.c_str());
+            ui::TableSetColumnIndex(1);
+            ui::TextUnformatted(profile.channel.c_str());
+            ui::TableSetColumnIndex(2);
+            ui::Text("%llu", profile.calls);
+            ui::TableSetColumnIndex(3);
+            ui::Text("%.3f", profile.GetAverageMilliseconds());
+            ui::TableSetColumnIndex(4);
+            ui::Text("%.3f", profile.minimumMilliseconds);
+            ui::TableSetColumnIndex(5);
+            ui::Text("%.3f", profile.maximumMilliseconds);
+        }
+        ui::EndTable();
+    }
+}
+
 void WorldFabricTab::RenderContent()
 {
     WorldFabricGraphResource& resource = GetWorldFabric();
@@ -467,6 +516,7 @@ void WorldFabricTab::RenderContent()
     RenderBuildOrder(resource);
     RenderImpactAnalysis(resource);
     RenderSemanticQuery(resource);
+    RenderProfiler(resource);
     if (!validationError_.empty())
         ui::TextColored(ImVec4(1.0f, 0.35f, 0.25f, 1.0f), "Error: %s", validationError_.c_str());
 }
