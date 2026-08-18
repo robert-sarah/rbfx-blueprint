@@ -447,6 +447,61 @@ jobs:
       - name: Run rbscript and Blueprint validation
         run: ${{ env.ci_build_script }} test --build-type dbg
 
+  blueprint-native-validation:
+    name: rbfx-blueprint native validation (${{ matrix.ci_platform_tag }})
+    runs-on: ${{ startsWith(matrix.ci_platform_tag, 'windows-') && 'windows-latest' || (startsWith(matrix.ci_platform_tag, 'macos-') && 'macos-latest' || 'ubuntu-latest') }}
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'rbfx/rbfx') && github.event.pull_request.draft == false }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ci_platform_tag: linux-gcc-x64-dll
+          - ci_platform_tag: windows-msvc-x64-dll
+          - ci_platform_tag: macos-clang-arm64-dll
+          - ci_platform_tag: macos-clang-x64-dll
+
+    env:
+      ci_platform_tag: ${{ matrix.ci_platform_tag }}
+      ci_workspace_dir: ${{ github.workspace }}
+      ci_source_dir: ${{ github.workspace }}/source-code
+      ci_build_dir: ${{ github.workspace }}/cmake-build-blueprint
+      ci_sdk_dir: ${{ github.workspace }}/SDK-blueprint
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+        with:
+          path: ${{ env.ci_source_dir }}
+          fetch-depth: 1
+
+      - name: Setup environment
+        run: ${{ env.ci_build_script }} setup-environment
+
+      - name: Setup cmake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '${{ env.CMAKE_VERSION }}'
+
+      - name: Dependencies
+        run: ${{ env.ci_build_script }} dependencies
+
+      - name: Generate rbfx-blueprint contract build
+        run: |
+          ${{ env.ci_build_script }} generate -- \
+            -DURHO3D_SAMPLES=OFF \
+            -DURHO3D_EDITOR=OFF \
+            -DURHO3D_PLAYER=OFF \
+            -DURHO3D_CSHARP=OFF \
+            -DURHO3D_TESTING=ON \
+            -DURHO3D_PROFILING_FALLBACK=ON
+
+      - name: Build rbfx-blueprint contracts
+        run: ${{ env.ci_build_script }} build --build-type dbg -- --parallel $ci_number_of_processors
+
+      - name: Run rbfx-blueprint contract tests
+        run: ${{ env.ci_build_script }} test --build-type dbg
+
   Docs:
     runs-on: ubuntu-latest
     # if: env.ci_publish == 'true'

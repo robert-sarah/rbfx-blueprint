@@ -14,14 +14,14 @@ namespace Urho3D
 
 using GameplayTestCallback = ea::function<bool(ea::string&)>;
 
-struct URHO3D_API GameplayTestCase
+struct GameplayTestCase
 {
     ea::string name;
     ea::vector<ea::string> tags;
     GameplayTestCallback callback;
 };
 
-struct URHO3D_API GameplayTestResult
+struct GameplayTestResult
 {
     ea::string name;
     bool passed{};
@@ -30,7 +30,7 @@ struct URHO3D_API GameplayTestResult
 };
 
 /// Deterministic in-engine gameplay test runner for CI, editor validation and package gates.
-class URHO3D_API GameplayTestRunner
+class GameplayTestRunner
 {
 public:
     bool Register(const GameplayTestCase& test);
