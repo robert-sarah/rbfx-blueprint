@@ -72,6 +72,16 @@ void Foundation_StandardFileTypes(Context* context, Project* project)
 
     project->AddAnalyzeFileCallback([](ResourceFileDescriptor& desc, const AnalyzeFileContext& ctx)
     {
+        if (desc.HasExtension({".inventory", ".equipment", ".dialogue", ".skilltree", ".economy", ".aiprofile", ".animationprofile",
+            ".vfx", ".ui", ".gameplay2d", ".gameplay3d", ".gameplayhybrid"}))
+        {
+            // Gameplay production assets use deterministic JSON schemas and remain editable through the standard resource browser.
+            desc.AddObjectType<JSONFile>();
+        }
+    });
+
+    project->AddAnalyzeFileCallback([](ResourceFileDescriptor& desc, const AnalyzeFileContext& ctx)
+    {
         if (desc.HasExtension({".shadergraph"}))
             desc.AddObjectType<ShaderGraphResource>();
     });

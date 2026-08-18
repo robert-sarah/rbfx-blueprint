@@ -80,7 +80,7 @@ The P3 layer extends World Fabric beyond the editor and provides contracts for d
 | **HotReloadStateStore** | Runtime field capture/restoration, hot-reload generations, validation, removal, and stable digests |
 | **Native CI** | `blueprint-native-validation` job covering Linux, Windows MSVC x64, and macOS arm64/x64 in GitHub Actions |
 
-Local validation of this delivery was performed on a clean Linux rebuild: **346/346 CTest tests pass**. Coverage includes negative cases for deterministic branches, malformed JSON, duplicates, causal detachment, and canonicalization of fields containing separators. The CI matrix prepares native Windows and macOS validation; it does not replace a graphical smoke test executed on each operating system.
+Local validation of this delivery was performed on a clean Linux rebuild: **355/355 CTest tests pass**. Coverage includes negative cases for deterministic branches, malformed JSON, duplicates, causal detachment, and canonicalization of fields containing separators. The CI matrix prepares native Windows and macOS validation; it does not replace a graphical smoke test executed on each operating system.
 
 ### Unique production extensions
 
@@ -110,7 +110,26 @@ The P5 delivery adds deterministic runtime contracts for large persistent worlds
 
 The gameplay services are composed through `OpenWorldGameplayRuntime`, allowing streaming, weather, time of day, quests, saves, and spatial audio to advance together without making the individual services depend on editor state. The implementation is intentionally exposed as engine contracts so a production game can connect real asset loading, navigation baking, audio buses, and persistence backends around deterministic core behavior.
 
-The Linux validation for P5 contains **346/346 CTest tests**, including the open world scheduler, culler, vegetation, navigation, LOD, quest, save, weather, day/night, spatial audio, and runtime-composition cases. The Linux Debug editor also builds successfully as `build-editor/bin/Debug/Editor`.
+### Gameplay production and project profiles
+
+The gameplay production layer adds reusable C++17 runtime contracts for the systems commonly required by a complete game project. Inventory definitions are stack-aware and weight-bounded; equipment swaps are transactional; dialogue nodes support gated choices and persistent flags; skill trees enforce prerequisites and deterministic point spending; and economy offers perform atomic buy and sell operations with explicit currencies.
+
+| Domain | Delivered capability |
+| --- | --- |
+| **Gameplay data** | Item definitions, inventory stacks, weight limits, equipment slots, skill ranks and prerequisites |
+| **Narrative** | Dialogue nodes, branching choices, required flags, granted flags and terminal states |
+| **Economy** | Integer balances, multi-currency offers, stock limits and atomic transactions |
+| **Advanced AI** | Priority-based stimulus selection with radius, strength, TTL and deterministic tie-breaking |
+| **Character animation** | One state-machine facade for sprite 2D, skeletal 3D and hybrid animation profiles |
+| **VFX** | Bounded deterministic instances supporting 2D sprite, 3D particle and hybrid effects |
+| **UI runtime** | Anchored widgets, visibility, text updates, z-order hit testing and 2D/3D overlay compatibility |
+| **Content authoring** | Registry, compatibility validation, deterministic manifests and editor recognition of gameplay asset extensions |
+
+`GameplayProjectProfile` makes the separation explicit. A **2D profile** enables Physics2D and sprite-oriented animation/VFX while disabling 3D lighting, 3D physics and 3D navigation. A **3D profile** enables 3D physics, navigation, lighting and skeletal animation while disabling Physics2D by default. A **Hybrid profile** enables both domains and is intended for 2.5D games, 3D worlds with 2D gameplay layers, or projects that deliberately combine sprite and skeletal content.
+
+The separation is enforced at content-registry validation time: a 2D-only profile rejects 3D assets, a 3D-only profile rejects 2D assets, and a hybrid profile accepts both. Standard editor file analysis recognizes `.inventory`, `.equipment`, `.dialogue`, `.skilltree`, `.economy`, `.aiprofile`, `.animationprofile`, `.vfx`, `.ui`, `.gameplay2d`, `.gameplay3d`, and `.gameplayhybrid` as JSON-editable production assets.
+
+The Linux validation for this delivery contains **355/355 CTest tests**, including inventory, equipment, dialogue, skills, economy, advanced AI, 2D/3D animation, VFX, UI, content compatibility and deterministic manifest cases. The Linux Debug editor build is validated separately through the `Editor` target.
 
 ## Repository architecture
 
@@ -201,7 +220,7 @@ rbfx-blueprint is distributed under the MIT License. The project is derived from
 
 ## Maturity status
 
-rbfx-blueprint now has a substantially broader editor and production foundation than a minimal prototype: resources are persisted, interface contracts are tested, World Fabric provides a cross-system semantic layer, and the P3/P4/P5 runtime and editor foundations are present. **346/346 Linux tests pass** in the current validation session, and the Linux Debug Editor target builds successfully. Full industrial-production qualification still requires load testing, reference projects, native Windows/macOS validation, broader user documentation, and long-duration stability campaigns.
+rbfx-blueprint now has a substantially broader editor and production foundation than a minimal prototype: resources are persisted, interface contracts are tested, World Fabric provides a cross-system semantic layer, and the P3/P4/P5 runtime and editor foundations are present. **355/355 Linux tests pass** in the current validation session, and the Linux Debug Editor target builds successfully. Full industrial-production qualification still requires load testing, reference projects, native Windows/macOS validation, broader user documentation, and long-duration stability campaigns.
 
 ## References
 
