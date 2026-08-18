@@ -80,7 +80,7 @@ The P3 layer extends World Fabric beyond the editor and provides contracts for d
 | **HotReloadStateStore** | Runtime field capture/restoration, hot-reload generations, validation, removal, and stable digests |
 | **Native CI** | `blueprint-native-validation` job covering Linux, Windows MSVC x64, and macOS arm64/x64 in GitHub Actions |
 
-Local validation of this delivery was performed on a clean Linux rebuild: **336/336 CTest tests pass**. Coverage includes negative cases for deterministic branches, malformed JSON, duplicates, causal detachment, and canonicalization of fields containing separators. The CI matrix prepares native Windows and macOS validation; it does not replace a graphical smoke test executed on each operating system.
+Local validation of this delivery was performed on a clean Linux rebuild: **346/346 CTest tests pass**. Coverage includes negative cases for deterministic branches, malformed JSON, duplicates, causal detachment, and canonicalization of fields containing separators. The CI matrix prepares native Windows and macOS validation; it does not replace a graphical smoke test executed on each operating system.
 
 ### Unique production extensions
 
@@ -94,6 +94,24 @@ The following three services extend World Fabric beyond a dependency graph and a
 
 These services are designed as reusable runtime contracts for the editor, CI, profiler, networking, and support tools. They provide a foundation for traceability and reproduction; they do not by themselves constitute complete production certification or automatic capture of every engine subsystem.
 
+### P5 — Open world runtime and multi-viewport authoring
+
+The P5 delivery adds deterministic runtime contracts for large persistent worlds and a Godot-style scene authoring layout:
+
+| Domain | Delivered capability |
+| --- | --- |
+| **Streaming** | Budget-aware open world scheduler integrated with `WorldPartition`, including deterministic prioritization and memory estimates |
+| **Visibility** | Conservative distance and field-of-view occlusion culling for registered world proxies |
+| **Vegetation** | Seed-stable cell-local vegetation generation with reproducible instance transforms |
+| **Navigation and LOD** | Per-cell navigation readiness and character LOD selection with hysteresis and culling thresholds |
+| **Gameplay persistence** | Quest definitions and progress, versioned JSON world saves, runtime capture/restore, and deterministic validation |
+| **Environment** | Weather state transitions, day/night progression with daylight projection, and spatial audio zones with distance falloff |
+| **Editor** | Switchable single viewport or four independently rendered Perspective, Top, Front, and Right panes; the active pane supports focus, panning, and orthographic zoom |
+
+The gameplay services are composed through `OpenWorldGameplayRuntime`, allowing streaming, weather, time of day, quests, saves, and spatial audio to advance together without making the individual services depend on editor state. The implementation is intentionally exposed as engine contracts so a production game can connect real asset loading, navigation baking, audio buses, and persistence backends around deterministic core behavior.
+
+The Linux validation for P5 contains **346/346 CTest tests**, including the open world scheduler, culler, vegetation, navigation, LOD, quest, save, weather, day/night, spatial audio, and runtime-composition cases. The Linux Debug editor also builds successfully as `build-editor/bin/Debug/Editor`.
+
 ## Repository architecture
 
 ```text
@@ -101,7 +119,7 @@ Source/
 ├── Urho3D/
 │   ├── Blueprint/       Visual graph runtime and reflection
 │   ├── RbScript/        rbscript language and compilation
-│   ├── WorldFabric/     Semantic graph, simulation, profiling, and plugins
+│   ├── WorldFabric/     Semantic graph, open world runtime, simulation, profiling, and plugins
 │   ├── Graphics/        Rendering, RenderGraph, and graphics resources
 │   ├── Network/         Networking runtime and multiplayer profiles
 │   └── ...              C++ rbfx/Urho3D subsystems
@@ -183,7 +201,7 @@ rbfx-blueprint is distributed under the MIT License. The project is derived from
 
 ## Maturity status
 
-rbfx-blueprint now has a substantially broader editor and production foundation than a minimal prototype: resources are persisted, interface contracts are tested, World Fabric provides a cross-system semantic layer, and the P3/P4 ecosystem is present. **336/336 Linux tests pass** in the current validation session. Full industrial-production qualification still requires load testing, reference projects, native Windows/macOS validation, broader user documentation, and long-duration stability campaigns.
+rbfx-blueprint now has a substantially broader editor and production foundation than a minimal prototype: resources are persisted, interface contracts are tested, World Fabric provides a cross-system semantic layer, and the P3/P4/P5 runtime and editor foundations are present. **346/346 Linux tests pass** in the current validation session, and the Linux Debug Editor target builds successfully. Full industrial-production qualification still requires load testing, reference projects, native Windows/macOS validation, broader user documentation, and long-duration stability campaigns.
 
 ## References
 

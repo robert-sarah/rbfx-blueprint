@@ -47,6 +47,8 @@
 
 #include <IconFontCppHeaders/IconsFontAwesome6.h>
 
+#include <algorithm>
+
 namespace Urho3D
 {
 
@@ -142,6 +144,42 @@ void Foundation_SceneViewTab(Context* context, Project* project)
         context->AddFactoryReflection<SceneResourceForEditor>();
 }
 
+SceneViewPane::SceneViewPane(Scene* scene, SceneViewPaneType type, const ea::string& label)
+    : type_(type)
+    , label_(label)
+    , renderer_(MakeShared<SceneRendererToTexture>(scene))
+{
+    Camera* camera = renderer_->GetCamera();
+    Node* cameraNode = renderer_->GetCameraNode();
+    camera->SetOrthographic(type != SceneViewPaneType::Perspective);
+    if (type == SceneViewPaneType::Perspective)
+    {
+        camera->SetFov(45.0f);
+        cameraNode->SetPosition(Vector3{0.0f, 3.0f, -10.0f});
+        cameraNode->SetRotation(Quaternion{15.0f, 0.0f, 0.0f});
+    }
+    else
+    {
+        camera->SetOrthoSize(orthoSize_);
+        if (type == SceneViewPaneType::Top)
+        {
+            cameraNode->SetPosition(Vector3{0.0f, 100.0f, 0.0f});
+            cameraNode->SetRotation(Quaternion{90.0f, 0.0f, 0.0f});
+        }
+        else if (type == SceneViewPaneType::Front)
+        {
+            cameraNode->SetPosition(Vector3{0.0f, 0.0f, -100.0f});
+            cameraNode->SetRotation(Quaternion::IDENTITY);
+        }
+        else
+        {
+            cameraNode->SetPosition(Vector3{100.0f, 0.0f, 0.0f});
+            cameraNode->SetRotation(Quaternion{0.0f, -90.0f, 0.0f});
+        }
+    }
+    renderer_->SetActive(false);
+}
+
 SceneViewPage::SceneViewPage(SceneResource* resource)
     : Object(resource->GetContext())
     , resource_(resource)
@@ -151,6 +189,10 @@ SceneViewPage::SceneViewPage(SceneResource* resource)
 {
     scene_->SetFileName(resource_->GetAbsoluteFileName());
     scene_->SetUpdateEnabled(false);
+    multiViewports_.emplace_back(scene_, SceneViewPaneType::Perspective, "Perspective");
+    multiViewports_.emplace_back(scene_, SceneViewPaneType::Top, "Top");
+    multiViewports_.emplace_back(scene_, SceneViewPaneType::Front, "Front");
+    multiViewports_.emplace_back(scene_, SceneViewPaneType::Right, "Right");
 }
 
 SceneViewPage::~SceneViewPage()
@@ -901,6 +943,14 @@ void SceneViewTab::RenderToolbar()
         ui::EndDisabled();
     }
 
+    if (activePage)
+    {
+        const char* layoutLabel = multiViewportEnabled_ ? "1" : "4";
+        const char* layoutTooltip = multiViewportEnabled_ ? "Use single scene viewport" : "Use four scene viewports";
+        if (Widgets::ToolbarButton(layoutLabel, layoutTooltip, multiViewportEnabled_))
+            multiViewportEnabled_ = !multiViewportEnabled_;
+    }
+
     Widgets::ToolbarSeparator();
 
     for (SceneViewAddon* addon : addonsByToolbarPriority_)
@@ -1133,10 +1183,21 @@ void SceneViewTab::RenderContent()
         debug->SetLineAntiAlias(true);
     }
 
+    if (multiViewportEnabled_)
+    {
+        activePage->renderer_->SetActive(false);
+        RenderMultiViewport(*activePage);
+        return;
+    }
+
+    for (SceneViewPane& pane : activePage->multiViewports_)
+        pane.renderer_->SetActive(false);
+
     const IntVector2 contentSize = GetContentSize();
     if (contentSize.x_ == 0 || contentSize.y_ == 0)
         return;
 
+    activePage->renderer_->SetActive(true);
     activePage->renderer_->SetTextureSize(contentSize);
     activePage->renderer_->Update();
 
@@ -1154,6 +1215,68 @@ void SceneViewTab::RenderContent()
     UpdateAddons(*activePage);
 }
 
+void SceneViewTab::RenderMultiViewport(SceneViewPage& page)
+{
+    const ImVec2 available = ui::GetContentRegionAvail();
+    const float gap = ui::GetStyle().ItemSpacing.x;
+    const ImVec2 paneSize{
+        std::max(1.0f, (available.x - gap) * 0.5f),
+        std::max(1.0f, (available.y - gap) * 0.5f)};
+
+    for (unsigned index = 0; index < page.multiViewports_.size(); ++index)
+    {
+        if ((index & 1u) != 0)
+            ui::SameLine();
+        ui::PushID(static_cast<int>(index));
+        auto& pane = page.multiViewports_[index];
+        if (ui::BeginChild("##SceneViewportPane", paneSize, true))
+        {
+            ui::TextUnformatted(pane.label_.c_str());
+            const ImVec2 imageSize = ui::GetContentRegionAvail();
+            const IntVector2 textureSize{
+                std::max(1, static_cast<int>(imageSize.x)),
+                std::max(1, static_cast<int>(imageSize.y))};
+            pane.renderer_->SetActive(true);
+            pane.renderer_->SetTextureSize(textureSize);
+            pane.renderer_->Update();
+            Texture2D* texture = pane.renderer_->GetTexture();
+            Widgets::ImageItem(texture, ToImGui(texture->GetSize()));
+            pane.contentArea_ = Rect{ToVector2(ui::GetItemRectMin()), ToVector2(ui::GetItemRectMax())};
+
+            const bool hovered = ui::IsItemHovered();
+            if (hovered && ui::IsMouseClicked(MOUSEB_LEFT))
+                activeViewportIndex_ = index;
+            if (hovered && activeViewportIndex_ == index)
+            {
+                const ImGuiIO& io = ui::GetIO();
+                Node* cameraNode = pane.renderer_->GetCameraNode();
+                if (ui::IsMouseDown(MOUSEB_MIDDLE))
+                {
+                    const float scale = pane.renderer_->GetCamera()->IsOrthographic()
+                        ? pane.orthoSize_ / std::max(1.0f, imageSize.y) : 0.04f;
+                    const Vector3 dragDelta{io.MouseDelta.x * scale, -io.MouseDelta.y * scale, 0.0f};
+                    if (pane.type_ == SceneViewPaneType::Top)
+                        cameraNode->Translate(Vector3{-dragDelta.x_, 0.0f, dragDelta.y_}, TS_WORLD);
+                    else if (pane.type_ == SceneViewPaneType::Right)
+                        cameraNode->Translate(Vector3{0.0f, dragDelta.y_, dragDelta.x_}, TS_WORLD);
+                    else
+                        cameraNode->Translate(Vector3{-dragDelta.x_, dragDelta.y_, 0.0f}, TS_WORLD);
+                }
+                if (pane.renderer_->GetCamera()->IsOrthographic() && io.MouseWheel != 0.0f)
+                {
+                    pane.orthoSize_ = std::max(1.0f, pane.orthoSize_ * (1.0f - io.MouseWheel * 0.1f));
+                    pane.renderer_->GetCamera()->SetOrthoSize(pane.orthoSize_);
+                }
+                page.contentArea_ = pane.contentArea_;
+                UpdateCameraRay(pane.renderer_);
+                UpdateAddons(page);
+            }
+        }
+        ui::EndChild();
+        ui::PopID();
+    }
+}
+
 void SceneViewTab::UpdateAddons(SceneViewPage& page)
 {
     bool mouseConsumed = false;
@@ -1168,14 +1291,14 @@ void SceneViewTab::UpdateAddons(SceneViewPage& page)
         addon->Render(page);
 }
 
-void SceneViewTab::UpdateCameraRay()
+void SceneViewTab::UpdateCameraRay(SceneRendererToTexture* renderer)
 {
     SceneViewPage* activePage = GetActivePage();
     if (!activePage)
         return;
 
     ImGuiIO& io = ui::GetIO();
-    Camera* camera = activePage->renderer_->GetCamera();
+    Camera* camera = renderer ? renderer->GetCamera() : activePage->renderer_->GetCamera();
 
     const ImRect viewportRect{ui::GetItemRectMin(), ui::GetItemRectMax()};
     const auto pos = ToVector2((io.MousePos - viewportRect.Min) / viewportRect.GetSize());

@@ -35,6 +35,7 @@
 #include <Urho3D/Utility/PackedSceneData.h>
 
 #include <EASTL/any.h>
+#include <EASTL/vector.h>
 #include <EASTL/vector_multiset.h>
 
 namespace Urho3D
@@ -55,6 +56,27 @@ public:
     using SceneResource::SceneResource;
 };
 
+enum class SceneViewPaneType
+{
+    Perspective,
+    Top,
+    Front,
+    Right
+};
+
+/// Independent renderer and camera state for one Godot-style scene pane.
+class SceneViewPane
+{
+public:
+    SceneViewPane(Scene* scene, SceneViewPaneType type, const ea::string& label);
+
+    SceneViewPaneType type_;
+    ea::string label_;
+    SharedPtr<SceneRendererToTexture> renderer_;
+    Rect contentArea_;
+    float orthoSize_{50.0f};
+};
+
 /// Single page of SceneViewTab.
 class SceneViewPage : public Object
 {
@@ -70,6 +92,7 @@ public:
     const SharedPtr<SceneResource> resource_;
     const SharedPtr<Scene> scene_;
     const SharedPtr<SceneRendererToTexture> renderer_;
+    ea::vector<SceneViewPane> multiViewports_;
     const ea::string cfgFileName_;
 
     ea::unordered_map<ea::string, ea::pair<WeakPtr<const SceneViewAddon>, ea::any>> addonData_;
@@ -261,6 +284,11 @@ public:
     using ResourceEditorTab::PushAction;
     /// @}
 
+    /// Select the single or four-pane editor layout.
+    void SetMultiViewportEnabled(bool enabled) { multiViewportEnabled_ = enabled; }
+    bool IsMultiViewportEnabled() const { return multiViewportEnabled_; }
+    unsigned GetActiveViewportIndex() const { return activeViewportIndex_; }
+
     /// Return current state.
     /// @{
     const AddonSetByName& GetAddonsByName() const { return addonsByName_; }
@@ -292,7 +320,8 @@ private:
     /// @}
 
     void UpdateAddons(SceneViewPage& page);
-    void UpdateCameraRay();
+    void UpdateCameraRay(SceneRendererToTexture* renderer = nullptr);
+    void RenderMultiViewport(SceneViewPage& page);
     bool UpdateDropToScene();
     void InspectSelection(SceneViewPage& page);
 
@@ -310,6 +339,8 @@ private:
     PackedNodeComponentData clipboard_;
 
     bool componentSelection_{true};
+    bool multiViewportEnabled_{};
+    unsigned activeViewportIndex_{};
 };
 
 /// Action for scene simulation interval.
