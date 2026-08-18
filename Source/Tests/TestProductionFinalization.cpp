@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <Urho3D/WorldFabric/ProductionFinalization.h>
+#include <Urho3D/WorldFabric/ProductionReadiness.h>
 
 #include <catch2/catch_amalgamated.hpp>
 
@@ -203,4 +204,105 @@ TEST_CASE("Hot reload and build provenance require explicit production evidence"
     CHECK(ledger.ComputeDigest() != 0);
     ledger.Clear();
     CHECK_FALSE(ledger.Validate());
+}
+
+TEST_CASE("Production diagnostics are bounded, deterministic and privacy-safe", "[production][diagnostics]")
+{
+    ProductionDiagnosticLog log(2);
+    REQUIRE(log.Add({"RB-001", ProductionDiagnosticSeverity::Warning, "/home/ubuntu/project/main.rbscript", "warning in /Users/alice/project", 4, 8}));
+    REQUIRE(log.Add({"RB-002", ProductionDiagnosticSeverity::Error, "Source/Test.cpp", "invalid resource", 9, 2}));
+    CHECK_FALSE(log.Add({"RB-003", ProductionDiagnosticSeverity::Info, "Source/Test.cpp", "overflow", 1, 1}));
+    CHECK(log.HasErrors());
+    CHECK_FALSE(log.HasCritical());
+    CHECK(log.Count(ProductionDiagnosticSeverity::Warning) == 1);
+    CHECK(log.Serialize().find("<user-path>") != std::string::npos);
+    log.Clear();
+    CHECK(log.GetRecords().empty());
+}
+
+TEST_CASE("Production sanitizer and soak gates reject incomplete evidence", "[production][hardening]")
+{
+    ProductionSanitizerGate sanitizers;
+    SanitizerEvidence evidence{true, true, true, true, true, true, "gcc-13", {}};
+    CHECK(sanitizers.Validate(evidence));
+    evidence.fuzzing = false;
+    CHECK_FALSE(sanitizers.Validate(evidence));
+
+    ProductionSoakGate soak;
+    SoakBudget budget{1000, 60.0, 20.0, 2048};
+    SoakEvidence result{1200, 75.0, 16.0, 1024, 0, 0, 0};
+    CHECK(soak.Validate(budget, result));
+    result.crashCount = 1;
+    CHECK_FALSE(soak.Validate(budget, result));
+}
+
+TEST_CASE("Production native matrix requires real desktop evidence", "[production][native]")
+{
+    ProductionNativeReleaseGate gate;
+    const NativePlatformEvidence linuxEvidence{ProductionPlatform::Linux, "x86_64", "gcc-13", "Vulkan", "sha-linux", true, true, true, true, true, true};
+    const NativePlatformEvidence windowsEvidence{ProductionPlatform::Windows, "x86_64", "msvc", "DirectX", "sha-windows", true, true, true, true, true, true};
+    const NativePlatformEvidence macosEvidence{ProductionPlatform::macOS, "arm64", "clang", "Metal", "sha-macos", true, true, true, true, true, true};
+    REQUIRE(gate.Add(linuxEvidence));
+    REQUIRE(gate.Add(windowsEvidence));
+    REQUIRE(gate.Add(macosEvidence));
+    CHECK_FALSE(gate.Add(linuxEvidence));
+    CHECK(gate.ValidateDesktopMatrix());
+    CHECK(gate.Find(ProductionPlatform::Windows)->artifactDigest == "sha-windows");
+}
+
+TEST_CASE("Production reproducibility, plugins and dependency audit are versioned", "[production][reproducibility]")
+{
+    const ReproducibleBuildSpec build{"abc123", "gcc", "13.2", "3.28", "1.11", "linux-x86_64", "Release", "deps", "source", "artifact"};
+    ReproducibleBuildVerifier verifier;
+    CHECK(verifier.Validate(build));
+    CHECK(verifier.Equivalent(build, build));
+    CHECK(verifier.ComputeDigest(build) != 0);
+
+    ProductionPluginRegistry plugins;
+    REQUIRE(plugins.Add({"world-tools", "1.0.0", "1", ">=0.7", "world-tools.so", {"core"}, true}));
+    CHECK_FALSE(plugins.Add({"world-tools", "1.0.1", "1", ">=0.7", "world-tools.so", {}, true}));
+    CHECK(plugins.Validate());
+    CHECK(plugins.Remove("world-tools"));
+
+    ProductionDependencyAudit dependencies;
+    REQUIRE(dependencies.Add({"fmt", "10.2", "MIT", "sha-fmt", 0}));
+    REQUIRE(dependencies.Add({"catch2", "3.5", "BSL-1.0", "sha-catch2", 0}));
+    CHECK(dependencies.Validate());
+    CHECK(dependencies.ComputeDigest() != 0);
+}
+
+TEST_CASE("Production reference projects and release readiness expose missing gates", "[production][release]")
+{
+    ReferenceProjectCatalog projects;
+    const ReferenceProjectEvidence complete{"reference-2d", "Examples/2D", "sha-2d", "linux", true, true, true, true, true, true};
+    REQUIRE(projects.Add(complete));
+    REQUIRE(projects.Add({"reference-3d", "Examples/3D", "sha-3d", "linux", true, true, true, true, true, true}));
+    REQUIRE(projects.Add({"reference-hybrid", "Examples/Hybrid", "sha-hybrid", "linux", true, true, true, true, true, true}));
+    CHECK(projects.ValidateDesktopCoverage());
+
+    ProductionDocumentationEvidence docs{true, true, true, true, true, true, true, true, true, true};
+    ReleasePackagingEvidence packaging{"1.0.0", "linux-x86_64", "abc123", "sha-archive", true, true, true, true, true};
+    ProductionReleaseGate release;
+    CHECK(release.Validate(packaging, docs));
+
+    ProductionReadinessInput input;
+    input.sanitizers = {true, true, true, true, true, true, "gcc-13", {}};
+    input.soakBudget = {1000, 60.0, 20.0, 2048};
+    input.soakEvidence = {1200, 75.0, 16.0, 1024, 0, 0, 0};
+    input.documentation = docs;
+    input.packaging = packaging;
+    input.reproducibleBuild = {"abc123", "gcc", "13.2", "3.28", "1.11", "linux-x86_64", "Release", "deps", "source", "artifact"};
+    input.nativeDesktopMatrix = true;
+    input.referenceProjects = true;
+    input.dependencyAudit = true;
+    input.performanceBudgets = true;
+    ProductionReadinessEvaluator evaluator;
+    const ProductionReadinessResult ready = evaluator.Evaluate(input);
+    CHECK(ready.ready);
+    CHECK(ready.blocked.empty());
+
+    input.nativeDesktopMatrix = false;
+    const ProductionReadinessResult blocked = evaluator.Evaluate(input);
+    CHECK_FALSE(blocked.ready);
+    CHECK_FALSE(blocked.blocked.empty());
 }

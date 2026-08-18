@@ -79,3 +79,11 @@ cmake --build build-editor --target Editor -j2
 A release package should include the engine commit, `ProductionEngineVersion`, platform, compiler/toolchain, World Fabric digest, asset manifest digest, package artifact digest and the native test result. `BuildProvenanceLedger` is intended to store the toolchain and digest chain; `PackageTargetMatrix` rejects a desktop release manifest that omits one of Linux, Windows or macOS.
 
 The final release process should still perform real asset cooking, signing, installer generation, GPU-driver testing, crash-report verification and launch testing on each supported operating system. Those operations depend on the target project, credentials and hardware and cannot be honestly marked complete from a Linux-only sandbox.
+
+## ProductionReadiness 1.0 gates
+
+The complementary `ProductionReadiness` contracts in `Source/Urho3D/WorldFabric/ProductionReadiness.*` turn the remaining production requirements into explicit evidence gates. They cover privacy-safe diagnostics, sanitizer and fuzzing evidence, long-run soak budgets, native desktop release matrices, reproducible builds, plugin ABI manifests, dependency and license audits, 2D/3D/hybrid reference projects, documentation coverage and release packaging.
+
+The full gate matrix and the recommended 1.0 exit criteria are documented in [`Documentation/ProductionReadiness.md`](ProductionReadiness.md). The current Linux test validation contains **370/370 CTest tests** after integrating these contracts. This count verifies the tested Linux contracts; it does not replace native Windows/macOS graphical execution, GPU-driver validation, signing, installer testing or acceptance by an external project team.
+
+The workflow now includes a reproducible-release evidence job and a Linux ASan/UBSan production-contract job. These jobs publish the commit, toolchain, system and executable hashes as artifacts. Native platform certification still requires the corresponding real runners and target hardware.

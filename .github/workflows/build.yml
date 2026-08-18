@@ -137,6 +137,12 @@ jobs:
           path: ${{ env.ci_source_dir }}
           fetch-depth: 1
 
+      - name: Install Linux nativefiledialog dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev
+
       - name: Setup environment
         run: ${{ env.ci_build_script }} setup-environment
 

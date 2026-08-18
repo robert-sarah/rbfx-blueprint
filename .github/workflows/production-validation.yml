@@ -207,3 +207,88 @@ jobs:
         with:
           name: native-editor-smoke-${{ matrix.name }}
           path: native-editor-smoke.log
+
+  reproducible-evidence:
+    name: Reproducible release evidence
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev ninja-build
+
+      - name: Configure release evidence build
+        run: >-
+          cmake -S . -B build-reproducible -G Ninja
+          -DCMAKE_BUILD_TYPE=Release -DURHO3D_TESTING=ON
+          -DURHO3D_EDITOR=OFF -DURHO3D_PLAYER=OFF -DURHO3D_CSHARP=OFF
+          -DURHO3D_SAMPLES=OFF -DURHO3D_PROFILING_FALLBACK=ON
+
+      - name: Build and test release evidence
+        run: |
+          cmake --build build-reproducible --target Tests --parallel 2
+          ctest --test-dir build-reproducible --output-on-failure --output-junit production-tests.xml
+
+      - name: Record build provenance and hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "commit=$(git rev-parse HEAD)"
+            echo "branch=${GITHUB_REF_NAME}"
+            echo "cmake=$(cmake --version | head -1)"
+            echo "ninja=$(ninja --version)"
+            echo "compiler=$(c++ --version | head -1)"
+            echo "system=$(uname -a)"
+            echo "engine_version=0.7.0-production"
+          } > production-build-provenance.txt
+          : > production-binary-sha256.txt
+          while IFS= read -r -d '' binary; do
+            sha256sum "$binary" >> production-binary-sha256.txt
+          done < <(find build-reproducible -type f -executable \( -name Tests -o -name Editor -o -name Player \) -print0)
+          git diff --check
+
+      - name: Upload reproducibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reproducible-release-evidence
+          path: |
+            production-build-provenance.txt
+            production-binary-sha256.txt
+            build-reproducible/Testing/**/*.xml
+
+  hardening-linux:
+    name: Linux ASan/UBSan production contracts
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev ninja-build
+
+      - name: Configure sanitizer build
+        run: >-
+          cmake -S . -B build-sanitizers -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug -DURHO3D_TESTING=ON
+          -DURHO3D_EDITOR=OFF -DURHO3D_PLAYER=OFF -DURHO3D_CSHARP=OFF
+          -DURHO3D_SAMPLES=OFF -DURHO3D_PROFILING_FALLBACK=ON
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+
+      - name: Build sanitizer contracts
+        run: cmake --build build-sanitizers --target Tests --parallel 2
+
+      - name: Run production contracts under sanitizers
+        env:
+          ASAN_OPTIONS: detect_leaks=0:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: ctest --test-dir build-sanitizers -R Production --output-on-failure

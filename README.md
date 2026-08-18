@@ -4,7 +4,7 @@
 
 [![Native validation](https://github.com/robert-sarah/rbfx-blueprint/actions/workflows/build.yml/badge.svg?branch=blueprint-foundation)](https://github.com/robert-sarah/rbfx-blueprint/actions/workflows/build.yml)
 
-> **Project status:** production-foundation release `0.7.0-production`. The repository contains the P0–P6 foundations, a native Windows/macOS CI matrix, bounded soak and performance gates, and a documented editor smoke workflow. Platform certification still requires the native runners, display sessions, GPU drivers and release hardware to complete the evidence.
+> **Project status:** production-foundation release `0.7.0-production`. The repository contains the P0–P6 foundations, the 0.7.0 production-finalization layer, deterministic ProductionReadiness gates, a native Windows/macOS CI matrix, bounded soak and performance gates, and a documented editor smoke workflow. Platform certification still requires the native runners, display sessions, GPU drivers and release hardware to complete the evidence.
 
 ## Vision
 
@@ -80,7 +80,7 @@ The P3 layer extends World Fabric beyond the editor and provides contracts for d
 | **HotReloadStateStore** | Runtime field capture/restoration, hot-reload generations, validation, removal, and stable digests |
 | **Native CI** | `blueprint-native-validation` job covering Linux, Windows MSVC x64, and macOS arm64/x64 in GitHub Actions |
 
-Local validation of this delivery was performed on a clean Linux rebuild: **365/365 CTest tests pass**. Coverage includes negative cases for deterministic branches, malformed JSON, duplicates, causal detachment, and canonicalization of fields containing separators. The workflows `blueprint-native-validation` and `production-validation` prepare native Windows and macOS configuration, compilation and test execution. The latter also compiles the Editor on all desktop runners and runs a bounded Linux/Xvfb graphical smoke test; optional native GUI smoke runs are available through manual dispatch.
+Local validation of this delivery was performed on a clean Linux rebuild: **370/370 CTest tests pass**. Coverage includes negative cases for deterministic branches, malformed JSON, duplicates, causal detachment, and canonicalization of fields containing separators. The workflows `blueprint-native-validation` and `production-validation` prepare native Windows and macOS configuration, compilation and test execution. The latter also compiles the Editor on all desktop runners and runs a bounded Linux/Xvfb graphical smoke test; optional native GUI smoke runs are available through manual dispatch.
 
 ### Unique production extensions
 
@@ -129,7 +129,7 @@ The gameplay production layer adds reusable C++17 runtime contracts for the syst
 
 The separation is enforced at content-registry validation time: a 2D-only profile rejects 3D assets, a 3D-only profile rejects 2D assets, and a hybrid profile accepts both. Standard editor file analysis recognizes `.inventory`, `.equipment`, `.dialogue`, `.skilltree`, `.economy`, `.aiprofile`, `.animationprofile`, `.vfx`, `.ui`, `.gameplay2d`, `.gameplay3d`, and `.gameplayhybrid` as JSON-editable production assets.
 
-The Linux validation for this delivery contains **365/365 CTest tests**, including inventory, equipment, dialogue, skills, economy, advanced AI, 2D/3D animation, VFX, UI, content compatibility and deterministic manifest cases. The latest production contracts are documented in [`Documentation/ProductionFinalization.md`](Documentation/ProductionFinalization.md).
+The Linux validation for this delivery contains **370/370 CTest tests**, including inventory, equipment, dialogue, skills, economy, advanced AI, 2D/3D animation, VFX, UI, content compatibility and deterministic manifest cases. The latest production contracts are documented in [`Documentation/ProductionFinalization.md`](Documentation/ProductionFinalization.md) and the release gates are documented in [`Documentation/ProductionReadiness.md`](Documentation/ProductionReadiness.md).
 
 ### P6 — Production finalization 0.7.0-production
 
@@ -226,9 +226,15 @@ rbfx-blueprint is distributed under the MIT License. The project is derived from
 | Upstream Urho3D project | [github.com/urho3d/Urho3D](https://github.com/urho3d/Urho3D) |
 | License | [LICENSE](LICENSE) |
 
+## Production readiness
+
+`ProductionReadiness` adds explicit evidence gates for diagnostics, sanitizer and fuzzing campaigns, long-run soak, native desktop validation, reproducible builds, plugin ABI manifests, dependency and license audits, 2D/3D/hybrid reference projects, documentation coverage and release packaging. These gates make missing evidence visible instead of presenting a contract test as a platform certification. The CI workflow also records reproducible-build provenance and runs Linux ASan/UBSan production contracts.
+
+The recommended 1.0 exit criteria are documented in [`Documentation/ProductionReadiness.md`](Documentation/ProductionReadiness.md). The supported desktop matrix must be confirmed on real Windows, Linux and macOS machines with the target graphics drivers before claiming final platform certification.
+
 ## Maturity status
 
-rbfx-blueprint now has a substantially broader editor and production foundation than a minimal prototype: resources are persisted, interface contracts are tested, World Fabric provides a cross-system semantic layer, and the P3/P4/P5 runtime and editor foundations are present. **365/365 Linux tests pass** in the current validation session, and the Linux Debug Editor target builds successfully. Full industrial-production qualification still requires load testing, reference projects, native Windows/macOS validation, broader user documentation, and long-duration stability campaigns.
+rbfx-blueprint now has a substantially broader editor and production foundation than a minimal prototype: resources are persisted, interface contracts are tested, World Fabric provides a cross-system semantic layer, and the P3/P4/P5 runtime and editor foundations are present. **370/370 Linux tests pass** in the current validation session, and the Linux Debug Editor target builds successfully. Full industrial-production qualification still requires load testing, reference projects, native Windows/macOS validation, broader user documentation, and long-duration stability campaigns.
 
 ## References
 
