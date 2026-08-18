@@ -63,9 +63,22 @@ Les panneaux P2 sont intégrés à `WorldFabricTab` et s’appuient sur les serv
 
 ### P3 — Écosystème et fondations extensibles
 
-La première fondation P3 livrée est **PluginRegistry** : un registre de manifestes de plugins versionnés, avec capacités, dépendances, validation, détection de cycles, ordre de chargement déterministe, persistance JSON, extensions de ressources et digest reproductible. Les tests contractuels couvrent les cas valides et les manifestes invalides.
+La couche P3 livrée étend World Fabric au-delà de l’éditeur et fournit les contrats nécessaires à une production distribuée :
 
-Les travaux P3 suivants restent des axes de développement : SDK public complet pour plugins, registre de packages avec distribution, collaboration temps réel multi-utilisateur, LSP rbscript, documentation interactive et matrice de validation multiplateforme approfondie.
+| Service | Capacités livrées |
+| --- | --- |
+| **PluginRegistry et PluginSDK** | Manifestes versionnés, capacités, dépendances, détection de cycles, ordre d’activation déterministe, version ABI, callbacks de réflexion/Blueprint/rbscript/éditeur et digest reproductible |
+| **DistributedPackageRegistry** | Registre de packages, résolution sémantique des versions, plans de réplication, remplacements contrôlés, persistance JSON et digest stable |
+| **WorldFabricRealtimeSession** | Présence multi-utilisateur, horloge de Lamport, enveloppes ordonnées, accusés de réception et suivi des clients actifs |
+| **RbScriptLspService** | Protocole LSP/JSON-RPC, ouverture et mise à jour de documents, diagnostics, complétion, hover, définition, renommage et intégration avec la réflexion rbfx |
+| **InteractiveDocumentation** | Index de pages et symboles, recherche, rendu Markdown/HTML, import du registre de types et sérialisation JSON |
+| **IncrementalScheduler** | Invalidation transitive, propagation des dépendances, détection de cycles, tâches prêtes et digest déterministe |
+| **ContentAddressedCache** | Cache d’artefacts adressés par contenu, digests SHA-256/FNV-1a, révisions et remplacement versionné |
+| **GameplayTestHarness** | Exécution déterministe de callbacks, ordre stable, seed, limites de frames, résultats, digest et correction de l’ABI des utilitaires de tests |
+| **HotReloadStateStore** | Capture/restauration de champs runtime, générations de hot reload, validation, suppression et digest stable |
+| **CI native** | Job `blueprint-native-validation` couvrant Linux, Windows MSVC x64 et macOS arm64/x64 dans le workflow GitHub Actions |
+
+La validation locale de cette livraison a été effectuée sur une reconstruction propre Linux : **330/330 tests CTest passent**. La matrice CI prépare les validations natives Windows et macOS ; elle ne remplace pas encore un smoke test graphique exécuté sur chaque système.
 
 ## Architecture du dépôt
 
@@ -156,4 +169,4 @@ rbfx-blueprint est distribué sous la licence MIT. Le projet est dérivé de rbf
 
 ## État de maturité
 
-rbfx-blueprint dispose maintenant d’un socle d’éditeur et de production nettement plus large qu’un prototype minimal : les ressources sont persistées, les contrats d’interface sont testés, World Fabric fournit une couche sémantique transversale et les builds Linux de tests et d’éditeur ont été exécutés avec succès dans cette session. Une qualification « production industrielle » complète nécessite encore des tests de charge, des projets de référence, une validation multiplateforme native, une documentation utilisateur plus étendue et l’achèvement des composants P3 listés ci-dessus.
+rbfx-blueprint dispose maintenant d’un socle d’éditeur et de production nettement plus large qu’un prototype minimal : les ressources sont persistées, les contrats d’interface sont testés, World Fabric fournit une couche sémantique transversale, l’écosystème P3 est présent et **330/330 tests Linux passent** dans cette session. Une qualification « production industrielle » complète nécessite encore des tests de charge, des projets de référence, l’exécution des validations natives Windows/macOS, une documentation utilisateur plus étendue et des campagnes de stabilité longue durée.
