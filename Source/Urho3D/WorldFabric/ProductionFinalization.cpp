@@ -257,7 +257,7 @@ double FrameMetricsRecorder::GetP95FrameMilliseconds() const
     return values[index];
 }
 
-bool AnimationRetargeter::Validate(const AnimationRetargetProfile& profile, std::string* error) const
+bool ProductionAnimationRetargeter::Validate(const AnimationRetargetProfile& profile, std::string* error) const
 {
     if (profile.sourceRig.empty() || profile.targetRig.empty() || profile.sourceRig == profile.targetRig)
     {
@@ -278,7 +278,7 @@ bool AnimationRetargeter::Validate(const AnimationRetargetProfile& profile, std:
     return !profile.boneMap.empty();
 }
 
-std::size_t AnimationRetargeter::GetMappedBoneCount(const AnimationRetargetProfile& profile) const
+std::size_t ProductionAnimationRetargeter::GetMappedBoneCount(const AnimationRetargetProfile& profile) const
 {
     return profile.boneMap.size();
 }

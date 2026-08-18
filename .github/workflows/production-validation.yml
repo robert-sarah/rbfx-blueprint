@@ -40,6 +40,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Install Linux build dependencies
+        if: matrix.name == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev
+
       - name: Configure production test build
         run: >-
           cmake -S . -B build-production -DURHO3D_TESTING=ON
@@ -73,6 +79,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Install Linux build dependencies
+        if: matrix.name == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev
 
       - name: Configure editor validation build
         run: >-
@@ -111,7 +123,7 @@ jobs:
       - name: Install virtual display
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb
+          sudo apt-get install -y libdbus-1-dev xvfb
 
       - name: Configure graphical editor build
         run: >-

@@ -29,7 +29,7 @@ enum class RbScriptExpressionKind
     Index,
 };
 
-struct URHO3D_API RbScriptExpression
+struct RbScriptExpression
 {
     RbScriptExpressionKind kind{RbScriptExpressionKind::Invalid};
     RbScriptSourceSpan span;
@@ -51,7 +51,7 @@ enum class RbScriptStatementKind
     Emit,
 };
 
-struct URHO3D_API RbScriptStatement
+struct RbScriptStatement
 {
     RbScriptStatementKind kind{RbScriptStatementKind::Empty};
     RbScriptSourceSpan span;
@@ -62,7 +62,7 @@ struct URHO3D_API RbScriptStatement
     std::vector<std::unique_ptr<RbScriptStatement>> elseBody;
 };
 
-struct URHO3D_API RbScriptParameter
+struct RbScriptParameter
 {
     ea::string name;
     ea::string typeName;
@@ -70,7 +70,7 @@ struct URHO3D_API RbScriptParameter
     RbScriptSourceSpan span;
 };
 
-struct URHO3D_API RbScriptField
+struct RbScriptField
 {
     ea::string name;
     ea::string typeName;
@@ -79,7 +79,7 @@ struct URHO3D_API RbScriptField
     RbScriptSourceSpan span;
 };
 
-struct URHO3D_API RbScriptFunction
+struct RbScriptFunction
 {
     ea::string name;
     ea::string returnType{"void"};
@@ -91,7 +91,7 @@ struct URHO3D_API RbScriptFunction
     RbScriptSourceSpan span;
 };
 
-struct URHO3D_API RbScriptScript
+struct RbScriptScript
 {
     ea::string name;
     ea::string baseType;
@@ -101,14 +101,14 @@ struct URHO3D_API RbScriptScript
     RbScriptSourceSpan span;
 };
 
-struct URHO3D_API RbScriptModule
+struct RbScriptModule
 {
     ea::string name;
     ea::vector<ea::string> imports;
     std::vector<RbScriptScript> scripts;
     ea::vector<RbScriptDiagnostic> diagnostics;
 
-    bool IsValid() const;
+    URHO3D_API bool IsValid() const;
 };
 
 } // namespace Urho3D

@@ -123,7 +123,7 @@ struct AnimationRetargetProfile
     std::map<std::string, std::string> boneMap;
 };
 
-class URHO3D_API AnimationRetargeter
+class URHO3D_API ProductionAnimationRetargeter
 {
 public:
     bool Validate(const AnimationRetargetProfile& profile, std::string* error = nullptr) const;

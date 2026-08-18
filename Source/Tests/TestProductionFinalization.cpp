@@ -72,7 +72,7 @@ TEST_CASE("Animation retargeting and normalized blend graphs are deterministic",
     retarget.sourceRig = "hero-source";
     retarget.targetRig = "hero-runtime";
     retarget.boneMap = {{"root", "root"}, {"hand_l", "hand_l"}, {"hand_r", "hand_r"}};
-    AnimationRetargeter retargeter;
+    ProductionAnimationRetargeter retargeter;
     REQUIRE(retargeter.Validate(retarget));
     CHECK(retargeter.GetMappedBoneCount(retarget) == 3);
 

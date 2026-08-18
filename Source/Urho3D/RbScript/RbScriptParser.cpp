@@ -188,7 +188,7 @@ ea::vector<ea::string> RbScriptParser::ParseQualifiedName()
 
     if (Match(RbScriptTokenKind::Less))
     {
-        ea::string generic = JoinName(parts) + "<";
+        ea::string genericName = JoinName(parts) + "<";
         bool firstArgument = true;
         while (!Check(RbScriptTokenKind::Greater) && !IsAtEnd())
         {
@@ -196,14 +196,14 @@ ea::vector<ea::string> RbScriptParser::ParseQualifiedName()
                 Consume(RbScriptTokenKind::Comma, "E2012", "Expected ',' between generic type arguments");
             const ea::vector<ea::string> argument = ParseQualifiedName();
             if (!firstArgument)
-                generic += ",";
-            generic += JoinName(argument);
+                genericName += ",";
+            genericName += JoinName(argument);
             firstArgument = false;
         }
         Consume(RbScriptTokenKind::Greater, "E2013", "Expected '>' after generic type arguments");
-        generic += ">";
+        genericName += ">";
         parts.clear();
-        parts.push_back(generic);
+        parts.push_back(genericName);
     }
     return parts;
 }
