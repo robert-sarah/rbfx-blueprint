@@ -42,6 +42,7 @@
 #include <Urho3D/Animation/SequencerResource.h>
 #include <Urho3D/Particles/VFXGraphResource.h>
 #include <Urho3D/WorldFabric/BuildDashboardResource.h>
+#include <Urho3D/WorldFabric/WorldFabricGraphResource.h>
 #include <Urho3D/Scene/Scene.h>
 #include <Urho3D/Scene/SceneResource.h>
 #include <Urho3D/UI/Font.h>
@@ -95,6 +96,12 @@ void Foundation_StandardFileTypes(Context* context, Project* project)
     {
         if (desc.HasExtension({".builddashboard", ".buildgraph"}))
             desc.AddObjectType<BuildDashboardResource>();
+    });
+
+    project->AddAnalyzeFileCallback([](ResourceFileDescriptor& desc, const AnalyzeFileContext& ctx)
+    {
+        if (desc.HasExtension({".worldfabric", ".fabric", ".worldfabricgraph"}))
+            desc.AddObjectType<WorldFabricGraphResource>();
     });
 
     project->AddAnalyzeFileCallback([](ResourceFileDescriptor& desc, const AnalyzeFileContext& ctx)
