@@ -35,6 +35,7 @@
 #include "Foundation/InspectorTab/Texture2DInspector.h"
 #include "Foundation/InspectorTab/TextureCubeInspector.h"
 #include "Foundation/ModelViewTab.h"
+#include "Foundation/MultiplayerTab.h"
 #include "Foundation/ResourceBrowserTab.h"
 #include "Foundation/RbScriptTab.h"
 #include "Foundation/ShaderGraphTab.h"
@@ -113,6 +114,7 @@ EditorApplication::EditorApplication(Context* context)
     editorPluginManager_->AddPlugin("Foundation.VFXGraph", &Foundation_VFXGraphTab);
     editorPluginManager_->AddPlugin("Foundation.Sequencer", &Foundation_SequencerTab);
     editorPluginManager_->AddPlugin("Foundation.BuildDashboard", &Foundation_BuildDashboardTab);
+    editorPluginManager_->AddPlugin("Foundation.Multiplayer", &Foundation_MultiplayerTab);
     editorPluginManager_->AddPlugin("Foundation.WorldFabric", &Foundation_WorldFabricTab);
     editorPluginManager_->AddPlugin("Foundation.ResourceBrowser", &Foundation_ResourceBrowserTab);
     editorPluginManager_->AddPlugin("Foundation.HierarchyBrowser", &Foundation_HierarchyBrowserTab);
