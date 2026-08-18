@@ -1,123 +1,159 @@
-[![Build Status](https://github.com/rokups/rbfx/workflows/Build/badge.svg)](https://github.com/rokups/rbfx/actions)
-[![Discord Chat](https://img.shields.io/discord/560082228928053258.svg?logo=discord)](https://discord.gg/XKs73yf)
-[![Support on Patreon](https://img.shields.io/badge/dynamic/json?color=%23e85b46&label=Patreon&query=data.attributes.patron_count&suffix=%20patrons&url=https%3A%2F%2Fwww.patreon.com%2Fapi%2Fcampaigns%2F9697078&logo=patreon)](https://www.patreon.com/eugeneko)
+# rbfx-blueprint
 
-**The Rebel Fork** aka **rbfx** is an indie game engine/framework.
-It is an experimental fork of [Urho3D](https://github.com/urho3d/Urho3D) game engine distributed under [MIT license](https://github.com/rbfx/rbfx/blob/master/LICENSE).
+**rbfx-blueprint** est un moteur et framework de jeu **C++17 pour la 2D et la 3D**, basé sur le fork [rbfx](https://github.com/rbfx/rbfx) de [Urho3D](https://github.com/urho3d/Urho3D). Le projet conserve le contrôle offert par un moteur code-first tout en ajoutant une chaîne de production intégrée : éditeur extensible, graphes visuels Blueprint, langage gameplay rbscript, outils de rendu et de contenu, diagnostics corrélés et orchestration sémantique par **World Fabric**.
 
-**The Rebel Fork** is:
+> **État du projet :** branche active de développement. Les fondations P0, la majorité des fonctionnalités P1, les panneaux P2 principaux et les premières fondations P3 sont présentes dans le dépôt. Le projet n’est pas présenté comme une version finale certifiée pour toutes les plateformes.
 
-* **Free and Open Source Software**, and it will stay this way;
-* Suitable for 3D games and applications;
-* Moderately lightweight and modular;
-* Supported for Windows, Linux, MacOS, Android, iOS, Web and XBox (via UWP);
-* Just a C++ library with a couple of tools;
-* There are optional experimental C# bindings.
+## Vision
 
-**Note**: The Framework is not yet released and is undergoing active development.
-Backward compatibility is (mostly) preserved on resource level, but C++ API is prone to changes.
+L’objectif de rbfx-blueprint est de réunir dans un même moteur les trois modes de production suivants :
 
+| Couche | Rôle | Intégration |
+| --- | --- | --- |
+| **C++** | Runtime, rendu, physique, réseau, outils et extensions natives | API de réflexion rbfx partagée avec les autres couches |
+| **Blueprint** | Graphes visuels pour gameplay, logique, outils et production | Nœuds réfléchis, sous-graphes, commentaires, recherche et édition dans l’éditeur |
+| **rbscript** | Langage gameplay typé à syntaxe avec accolades | Conçu pour exploiter la même réflexion rbfx que C++ et Blueprint |
+| **World Fabric** | Graphe sémantique transversal | Relie ressources, dépendances, build, simulation, profiling, réseau et production |
 
-## Using the Framework
+## World Fabric : la différenciation du projet
 
-There are two template projects that you can use as example.
+**World Fabric** est le graphe de dépendances sémantiques du moteur. Il ne représente pas uniquement des fichiers : chaque nœud peut décrire une scène, un asset, un shader, un graphe Blueprint, un script, une tâche de build, une simulation ou un système runtime. Les dépendances sont persistées dans des ressources JSON et peuvent être analysées, ordonnées, profilées et interrogées depuis l’éditeur.
 
-[Empty Project](https://github.com/rbfx/empty-project) is the absolute minimum of code
-that is required to get things running on Desktop platforms.
-Check it out if you don't care about recommended high-level workflow and want to do things your way.
+Cette architecture permet de relier la cause et l’effet dans un pipeline de production : une modification de ressource peut être suivie vers ses consommateurs, ses tâches invalidées, ses événements temporels et ses coûts CPU/GPU. Les services runtime associés incluent l’analyse d’impact transitive, les requêtes sémantiques, le profiling corrélé, la simulation déterministe et les opérations de collaboration versionnées.
 
-[Sample Project](https://github.com/rbfx/sample-project) demonstrates recommended workflow
-which enables certain high-level features like writing your code once and then running it
-both from Editor and standalone. Sample Project is also Mobile and Web friendly
-and is deployed to [itch.io](https://eugeneko.itch.io/sample-project).
+## Fonctionnalités disponibles
 
-Building the project is usually straighforward on Desktop platforms: standard CMake configure and build.
-On Mobile and Web platforms extra steps may be needed.
-If you cannot figure it out, check how our GitHub Actions are configured.
-Chech documentation for more information.
+### P0 — Fondations de l’éditeur
 
-### Prebuilt Binaries
+Le socle P0 met en place une expérience d’éditeur cohérente : système visuel partagé, docking, workspaces, palette de commandes, autosave et récupération, filtres dans l’Asset Browser, l’Inspector et l’Outliner, contrats UI communs et tests automatisés associés.
 
-There are [prebuilt binaries](https://github.com/rbfx/rbfx/releases/tag/latest)
-available for the latest successful build of `master` branch.
+### P1 — Pipeline de production intégré
 
-* `rebelfork-sdk-*.zip` can be downloaded and used out of the box.
-* `rebelfork-bin-*.zip` contains only prebuilt binaries without any resources.
-  Download it only if you already have necessary resources and you know what you are doing.
-* It is recommended to run Release binaries (`bin/Release/` or `bin/RelWithDebInfo/`).
-  Debug binaries may require additional dependencies in order to run (e.g. Win10 SDK).
+Les éditeurs et ressources suivants sont disponibles dans la branche `blueprint-foundation` :
 
+| Domaine | Fonctionnalités |
+| --- | --- |
+| **Rendu** | Ressource et éditeur **Shader Graph** |
+| **Effets** | Ressource et éditeur **VFX Graph** |
+| **Audio** | Ressource et éditeur **Audio Mixer** |
+| **Animation et cinématique** | Ressource et éditeur **Sequencer** |
+| **Construction** | **Build Dashboard** et ressource de build déterministe |
+| **Monde** | Inspecteur de production Terrain, TileMap2D et NavigationMesh |
+| **Multijoueur** | **Multiplayer Profile**, réglages de démarrage, réplication et diagnostics |
+| **Routage des ressources** | Extensions dédiées enregistrées dans `StandardFileTypes` |
 
-## Supported Platforms
+Ces composants fournissent les contrats d’édition, la persistance JSON, les validations et les points d’intégration nécessaires à une chaîne de production plus large. Ils ne remplacent pas encore une matrice de certification complète pour Windows, macOS, Linux, mobile, WebAssembly et consoles.
 
-| Graphics API/Platform | Windows | UWP | Linux | MacOS | iOS | Android | Web |
-| --------------------- |:-------:|:---:|:-----:|:-----:|:---:|:-------:|:---:|
-| Direct3D 11.1         | ✔       | ✔   |       |       |     |         |     |
-| Direct3D 12           | ✔       | ✔   |       |       |     |         |     |
-| Vulkan 1.0            | ✔       |     | ✔     | ✔*    | ✔*  | ✔       |     |
-| OpenGL 4.1            | ✔       |     | ✔     | ✔     |     |         |     |
-| OpenGL ES 3.0         |         |     |       |       | ✔   | ✔       |     |
-| WebGL 2.0             |         |     |       |       |     |         | ✔   |
+### P2 — World Fabric et production corrélée
 
-(*) `Vulkan` is supported on MacOS and iOS via `MoltenVK`. Additional setup is required.
+La couche P2 comprend :
 
+| Service | Capacités |
+| --- | --- |
+| **Dependency Explorer** | Édition des nœuds et arêtes, inspecteur et ordre de build |
+| **Impact Analysis** | Propagation transitive des impacts dans le graphe |
+| **Semantic Query** | Recherche de nœuds selon leurs types, tags et métadonnées |
+| **Correlated Profiler** | Corrélation des statistiques de nœuds avec les mesures runtime |
+| **Semantic Timeline** | Association de nœuds World Fabric aux événements temporels de Sequencer |
+| **Incremental Scheduler** | Visualisation de l’invalidation et de l’état des tâches par nœud |
+| **Deterministic Reproduction** | Démarrage, restauration, replay et historique de snapshots |
+| **Collaboration** | Clients connus, verrouillage, opérations, révisions et diagnostics de synchronisation |
 
-## Links
+Les panneaux P2 sont intégrés à `WorldFabricTab` et s’appuient sur les services runtime de `Source/Urho3D/WorldFabric/`, plutôt que sur des données d’interface isolées.
 
-* [Latest Binaries for Desktop Platforms](https://github.com/rbfx/rbfx/releases/tag/latest)
+### P3 — Écosystème et fondations extensibles
 
-* [Documentation](https://rbfx.github.io/index.html)
+La première fondation P3 livrée est **PluginRegistry** : un registre de manifestes de plugins versionnés, avec capacités, dépendances, validation, détection de cycles, ordre de chargement déterministe, persistance JSON, extensions de ressources et digest reproductible. Les tests contractuels couvrent les cas valides et les manifestes invalides.
 
-* [Project Repository on GitHub](https://github.com/rbfx/rbfx)
+Les travaux P3 suivants restent des axes de développement : SDK public complet pour plugins, registre de packages avec distribution, collaboration temps réel multi-utilisateur, LSP rbscript, documentation interactive et matrice de validation multiplateforme approfondie.
 
-* [Documentation Repository](https://github.com/rbfx/rbfx-docs) for documentation issues and pull requests
+## Architecture du dépôt
 
-* [Discord Server](https://discord.gg/XKs73yf)
+```text
+Source/
+├── Urho3D/
+│   ├── Blueprint/       Runtime et réflexion des graphes visuels
+│   ├── RbScript/        Langage et compilation rbscript
+│   ├── WorldFabric/     Graphe sémantique, simulation, profiling et plugins
+│   ├── Graphics/        Rendu, RenderGraph et ressources graphiques
+│   ├── Network/         Runtime réseau et profils multijoueur
+│   └── ...              Sous-systèmes C++ rbfx/Urho3D
+├── Editor/
+│   ├── Foundation/      Onglets et contrats de l’éditeur de production
+│   └── ...              Applications et extensions de l’éditeur
+└── Tests/               Tests Catch2 v3 des ressources et services
+```
 
+Les fichiers C++ des répertoires principaux sont découverts automatiquement par la configuration CMake existante. Les ressources de production utilisent les conventions rbfx de chargement, sauvegarde JSON, réflexion et validation.
 
-## Reasons to use
+## Prérequis
 
-There are multiple game engines out there, both proprietary and free.
-Here are some reasons why you may want to try this one:
+Le développement principal est réalisé avec **C++17**, **CMake**, **Ninja** et un compilateur compatible GCC 13 ou équivalent. Sous Linux, les dépendances graphiques et système usuelles d’OpenGL, Vulkan, X11, DBus et des bibliothèques incluses doivent être disponibles. Les dépendances tierces du moteur sont gérées par le dépôt et sa configuration CMake.
 
-* It's "code first" framework with full control over code execution,
-    unlike Unity-like game engines with "IDE first" approach and script sandboxes.
+## Compilation et tests sous Linux
 
-* It's portable and relatively lightweight framework that can be used like any other third-party dependency,
-    unlike huge mainstream game engines.
+Depuis la racine du dépôt :
 
-* It's a fork of the mature and stable Urho3D engine (which was released in 2011),
-    so it's more feature-rich and well tested than many of the new non-mainstream game engines.
+```bash
+cmake -S . -B build -G Ninja \
+  -DURHO3D_TESTING=ON \
+  -DURHO3D_EDITOR=OFF \
+  -DURHO3D_PLAYER=OFF \
+  -DURHO3D_CSHARP=OFF
 
-* If you already use Urho3D, you may want to try this framework if you like Urho3D
-    but you are not fully satisfied with current Urho3D feature set.
+cmake --build build --target Tests -j2
+ctest --test-dir build --output-on-failure
+```
 
+Pour compiler l’éditeur Linux en mode Debug :
 
-## Reasons NOT to use
+```bash
+cmake -S . -B build-editor -G Ninja \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DURHO3D_EDITOR=ON \
+  -DURHO3D_PLAYER=OFF \
+  -DURHO3D_TOOLS=OFF \
+  -DURHO3D_TESTING=OFF \
+  -DURHO3D_CSHARP=OFF
 
-**Don't** use the Framework if:
+cmake --build build-editor --target Editor -j2
+```
 
-* You are not ready to do your own research.
-    Due to small community size, we don't have as much documentation, tutorials and other onboarding materials.
-    Consider using mainstream engines with bigger communities.
+Le build Editor Linux validé dans cette branche produit `build-editor/bin/Debug/Editor`. Le build de test produit le binaire Catch2 dans `build/bin/`, selon la configuration choisie par CMake.
 
-* You are not ready to write code when you need some feature.
-    Due to small community and maintainers team size, we don't have as much "ready to use" codebase.
-    Consider using mainstream engines with user store and ready-to-use assets.
+## Portabilité
 
-* You want to have cutting-edge graphics or technology for AAA game.
-    We try to provide decent level of technology, but we don't aim to be on the level of AAA graphics fidelity.
-    Consider using commercial mainstream engines backed by paid full-time developers.
+La base rbfx vise les environnements desktop et dispose d’une architecture CMake portable. La validation complète doit toutefois être distinguée de la simple capacité théorique de compilation :
 
-* You are happy with Urho3D.
-    This framework is not intended to be a replacement of Urho3D.
-    Consider using [U3D](https://github.com/u3d-community/U3D) or [Urho3D](https://github.com/urho3d/Urho3D).
+| Plateforme | Situation documentée dans cette branche |
+| --- | --- |
+| **Linux x86_64** | Configuration et compilation de l’éditeur validées dans l’environnement de développement |
+| **Windows** | Configuration à valider par smoke test graphique réel et exécution native |
+| **macOS** | Configuration et smoke tests à compléter sur environnement macOS natif |
+| **Android, iOS, WebAssembly, consoles** | Adaptateurs et matrices de validation à poursuivre selon les toolchains disponibles |
 
-* You want C#-oriented Urho3D.
-    While this framework *does* have C# bindings, C# is not a first-class citizen here and its support is lacking.
-    Consider using [Urho.Net](https://github.com/Urho-Net).
+Les contributions qui ajoutent une plateforme doivent fournir une commande de configuration, un build reproductible et, lorsque l’interface est concernée, un smoke test natif.
 
+## Contribuer
 
-## Screenshots
+Les contributions doivent rester compatibles avec les conventions C++17 et les conteneurs rbfx/EASTL utilisés par le projet. Toute nouvelle ressource doit définir une persistance stable, une validation négative, un digest lorsque cela est pertinent et un test Catch2. Toute extension d’éditeur doit respecter les contrats `ResourceEditorTab`, utiliser les mécanismes d’annulation existants et éviter de faire transiter des pointeurs const vers les champs ImGui mutables.
 
-![](https://github.com/rbfx/rbfx-docs/blob/master/images/showcase/screenshot-00.png?raw=true)
+Avant de créer une pull request, exécutez au minimum `git diff --check`, la suite `Tests` et le build Editor si vos modifications concernent `Source/Editor/`. Les artefacts tels que `build/` et `build-editor/` ne doivent pas être commités.
+
+## Licence et provenance
+
+rbfx-blueprint est distribué sous la licence MIT. Le projet est dérivé de rbfx et d’Urho3D ; les notices de copyright amont sont conservées dans [LICENSE](LICENSE). Les contributions spécifiques à rbfx-blueprint sont attribuées aux auteurs et contributeurs du fork.
+
+## Liens
+
+| Ressource | Lien |
+| --- | --- |
+| Dépôt rbfx-blueprint | [github.com/robert-sarah/rbfx-blueprint](https://github.com/robert-sarah/rbfx-blueprint) |
+| Branche de développement actuelle | [`blueprint-foundation`](https://github.com/robert-sarah/rbfx-blueprint/tree/blueprint-foundation) |
+| Projet amont rbfx | [github.com/rbfx/rbfx](https://github.com/rbfx/rbfx) |
+| Projet amont Urho3D | [github.com/urho3d/Urho3D](https://github.com/urho3d/Urho3D) |
+| Licence | [LICENSE](LICENSE) |
+
+## État de maturité
+
+rbfx-blueprint dispose maintenant d’un socle d’éditeur et de production nettement plus large qu’un prototype minimal : les ressources sont persistées, les contrats d’interface sont testés, World Fabric fournit une couche sémantique transversale et les builds Linux de tests et d’éditeur ont été exécutés avec succès dans cette session. Une qualification « production industrielle » complète nécessite encore des tests de charge, des projets de référence, une validation multiplateforme native, une documentation utilisateur plus étendue et l’achèvement des composants P3 listés ci-dessus.
