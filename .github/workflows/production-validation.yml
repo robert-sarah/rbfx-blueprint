@@ -1,0 +1,197 @@
+name: Production Validation
+
+on:
+  push:
+    branches:
+      - blueprint-foundation
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      native_gui_smoke:
+        description: 'Attempt native Windows/macOS editor launch on hosted runners'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-contracts:
+    name: Native contracts (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-24.04
+          - name: windows
+            os: windows-2025
+          - name: macos
+            os: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Configure production test build
+        run: >-
+          cmake -S . -B build-production -DURHO3D_TESTING=ON
+          -DURHO3D_EDITOR=OFF -DURHO3D_PLAYER=OFF -DURHO3D_CSHARP=OFF
+          -DURHO3D_SAMPLES=OFF -DURHO3D_PROFILING_FALLBACK=ON
+          -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build production tests
+        run: cmake --build build-production --config Release --target Tests --parallel 2
+
+      - name: Run complete native test suite
+        run: ctest --test-dir build-production -C Release --output-on-failure
+
+      - name: Run production endurance and performance gates
+        run: |
+          ctest --test-dir build-production -C Release -R "Production" --output-on-failure
+
+  editor-build:
+    name: Editor build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-24.04
+          - name: windows
+            os: windows-2025
+          - name: macos
+            os: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Configure editor validation build
+        run: >-
+          cmake -S . -B build-editor-validation -DURHO3D_EDITOR=ON
+          -DURHO3D_PLAYER=OFF -DURHO3D_TESTING=OFF -DURHO3D_CSHARP=OFF
+          -DURHO3D_SAMPLES=OFF -DURHO3D_PROFILING_FALLBACK=ON
+          -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Compile editor
+        run: cmake --build build-editor-validation --config Debug --target Editor --parallel 2
+
+      - name: Publish editor build metadata
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "platform=${{ matrix.name }}"
+            echo "commit=${GITHUB_SHA}"
+            echo "editor_build=completed"
+          } > editor-validation-${{ matrix.name }}.txt
+
+      - name: Upload editor validation metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-validation-${{ matrix.name }}
+          path: editor-validation-${{ matrix.name }}.txt
+
+  linux-graphical-smoke:
+    name: Graphical editor smoke (Linux/Xvfb)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
+      - name: Configure graphical editor build
+        run: >-
+          cmake -S . -B build-editor-graphical -DURHO3D_EDITOR=ON
+          -DURHO3D_PLAYER=OFF -DURHO3D_TESTING=OFF -DURHO3D_CSHARP=OFF
+          -DURHO3D_SAMPLES=OFF -DURHO3D_PROFILING_FALLBACK=ON
+          -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build graphical editor
+        run: cmake --build build-editor-graphical --config Debug --target Editor --parallel 2
+
+      - name: Launch editor under a virtual display
+        shell: bash
+        run: |
+          set +e
+          editor="$(find build-editor-graphical -type f -executable -name Editor | head -1)"
+          if [[ -z "$editor" ]]; then
+            echo "Editor executable was not produced"
+            exit 1
+          fi
+          timeout --signal=TERM 30s xvfb-run -a "$editor" > editor-graphical-smoke.log 2>&1
+          status=$?
+          if [[ "$status" != "0" && "$status" != "124" && "$status" != "143" ]]; then
+            cat editor-graphical-smoke.log
+            exit "$status"
+          fi
+
+      - name: Upload graphical smoke log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-graphical-smoke-linux
+          path: editor-graphical-smoke.log
+
+  native-gui-smoke:
+    name: Optional native GUI smoke (${{ matrix.name }})
+    if: github.event_name == 'workflow_dispatch' && inputs.native_gui_smoke == true
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            os: windows-2025
+          - name: macos
+            os: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Configure editor
+        run: >-
+          cmake -S . -B build-native-gui -DURHO3D_EDITOR=ON
+          -DURHO3D_PLAYER=OFF -DURHO3D_TESTING=OFF -DURHO3D_CSHARP=OFF
+          -DURHO3D_SAMPLES=OFF -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build editor
+        run: cmake --build build-native-gui --config Debug --target Editor --parallel 2
+
+      - name: Launch native editor smoke
+        shell: bash
+        run: |
+          set -e
+          editor="$(find build-native-gui -type f -perm -111 -name Editor -o -name Editor.exe | head -1)"
+          if [[ -z "$editor" ]]; then
+            echo "Native editor executable was not produced"
+            exit 1
+          fi
+          "$editor" > native-editor-smoke.log 2>&1 &
+          pid=$!
+          sleep 20
+          if ! kill -0 "$pid" 2>/dev/null; then
+            cat native-editor-smoke.log
+            exit 1
+          fi
+          kill "$pid" || true
+
+      - name: Upload native smoke log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-editor-smoke-${{ matrix.name }}
+          path: native-editor-smoke.log

@@ -1,10 +1,10 @@
 # rbfx-blueprint
 
-**rbfx-blueprint** is a **C++17 2D and 3D game engine and framework** based on the [rbfx](https://github.com/rbfx/rbfx) fork of [Urho3D](https://github.com/urho3d/Urho3D). It preserves the control of a code-first engine while adding an integrated production toolchain: an extensible editor, Blueprint visual graphs, the typed rbscript gameplay language, rendering and content tools, correlated diagnostics, and semantic orchestration through **World Fabric**.
+**rbfx-blueprint** is **version 0.7.0-production**, a **C++17 2D and 3D game engine and framework** based on the [rbfx](https://github.com/rbfx/rbfx) fork of [Urho3D](https://github.com/urho3d/Urho3D). It preserves the control of a code-first engine while adding an integrated production toolchain: an extensible editor, Blueprint visual graphs, the typed rbscript gameplay language, rendering and content tools, correlated diagnostics, and semantic orchestration through **World Fabric**.
 
 [![Native validation](https://github.com/robert-sarah/rbfx-blueprint/actions/workflows/build.yml/badge.svg?branch=blueprint-foundation)](https://github.com/robert-sarah/rbfx-blueprint/actions/workflows/build.yml)
 
-> **Project status:** active development branch. The P0 foundations, most P1 features, the main P2 panels, and the P3/P4 foundations are present in the repository. The project is not presented as a final release certified for every platform.
+> **Project status:** production-foundation release `0.7.0-production`. The repository contains the P0–P6 foundations, a native Windows/macOS CI matrix, bounded soak and performance gates, and a documented editor smoke workflow. Platform certification still requires the native runners, display sessions, GPU drivers and release hardware to complete the evidence.
 
 ## Vision
 
@@ -80,7 +80,7 @@ The P3 layer extends World Fabric beyond the editor and provides contracts for d
 | **HotReloadStateStore** | Runtime field capture/restoration, hot-reload generations, validation, removal, and stable digests |
 | **Native CI** | `blueprint-native-validation` job covering Linux, Windows MSVC x64, and macOS arm64/x64 in GitHub Actions |
 
-Local validation of this delivery was performed on a clean Linux rebuild: **355/355 CTest tests pass**. Coverage includes negative cases for deterministic branches, malformed JSON, duplicates, causal detachment, and canonicalization of fields containing separators. The CI matrix prepares native Windows and macOS validation; it does not replace a graphical smoke test executed on each operating system.
+Local validation of this delivery was performed on a clean Linux rebuild: **365/365 CTest tests pass**. Coverage includes negative cases for deterministic branches, malformed JSON, duplicates, causal detachment, and canonicalization of fields containing separators. The workflows `blueprint-native-validation` and `production-validation` prepare native Windows and macOS configuration, compilation and test execution. The latter also compiles the Editor on all desktop runners and runs a bounded Linux/Xvfb graphical smoke test; optional native GUI smoke runs are available through manual dispatch.
 
 ### Unique production extensions
 
@@ -129,7 +129,15 @@ The gameplay production layer adds reusable C++17 runtime contracts for the syst
 
 The separation is enforced at content-registry validation time: a 2D-only profile rejects 3D assets, a 3D-only profile rejects 2D assets, and a hybrid profile accepts both. Standard editor file analysis recognizes `.inventory`, `.equipment`, `.dialogue`, `.skilltree`, `.economy`, `.aiprofile`, `.animationprofile`, `.vfx`, `.ui`, `.gameplay2d`, `.gameplay3d`, and `.gameplayhybrid` as JSON-editable production assets.
 
-The Linux validation for this delivery contains **355/355 CTest tests**, including inventory, equipment, dialogue, skills, economy, advanced AI, 2D/3D animation, VFX, UI, content compatibility and deterministic manifest cases. The Linux Debug editor build is validated separately through the `Editor` target.
+The Linux validation for this delivery contains **365/365 CTest tests**, including inventory, equipment, dialogue, skills, economy, advanced AI, 2D/3D animation, VFX, UI, content compatibility and deterministic manifest cases. The latest production contracts are documented in [`Documentation/ProductionFinalization.md`](Documentation/ProductionFinalization.md).
+
+### P6 — Production finalization 0.7.0-production
+
+The finalization layer adds twenty explicit, testable production gates and authoring services: native validation evidence, deterministic soak runs, CPU/GPU/frame/memory budgets, frame history with P95 metrics, animation retargeting, blend graphs, cinematic timelines and shot lists, 2D/3D/hybrid asset import validation, dependency and export manifests, visual UI styles and anchored layout, reproducible package manifests, desktop target matrices, crash recovery, input action maps, screenshot regression digests, state-aware resource hot reload and build provenance ledgers.
+
+The new [`production-validation.yml`](.github/workflows/production-validation.yml) workflow configures and tests Linux, Windows and macOS, compiles the Editor on all three desktop runners, and runs a bounded graphical smoke test under Linux/Xvfb. A manual native GUI mode is available for hosted Windows/macOS runners, but release-grade graphical certification still requires a display-capable native machine and the target GPU drivers.
+
+The final version is intentionally described as a **production foundation**, not as a claim that every external SDK, GPU driver, installer signer, console kit or project-specific asset pipeline has been certified. This distinction keeps the release evidence reproducible and honest.
 
 ## Repository architecture
 
@@ -220,7 +228,7 @@ rbfx-blueprint is distributed under the MIT License. The project is derived from
 
 ## Maturity status
 
-rbfx-blueprint now has a substantially broader editor and production foundation than a minimal prototype: resources are persisted, interface contracts are tested, World Fabric provides a cross-system semantic layer, and the P3/P4/P5 runtime and editor foundations are present. **355/355 Linux tests pass** in the current validation session, and the Linux Debug Editor target builds successfully. Full industrial-production qualification still requires load testing, reference projects, native Windows/macOS validation, broader user documentation, and long-duration stability campaigns.
+rbfx-blueprint now has a substantially broader editor and production foundation than a minimal prototype: resources are persisted, interface contracts are tested, World Fabric provides a cross-system semantic layer, and the P3/P4/P5 runtime and editor foundations are present. **365/365 Linux tests pass** in the current validation session, and the Linux Debug Editor target builds successfully. Full industrial-production qualification still requires load testing, reference projects, native Windows/macOS validation, broader user documentation, and long-duration stability campaigns.
 
 ## References
 
