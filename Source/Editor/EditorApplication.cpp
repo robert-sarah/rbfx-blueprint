@@ -25,6 +25,7 @@
 #include "Foundation/InspectorTab/MaterialInspector.h"
 #include "Foundation/InspectorTab/ModelInspector.h"
 #include "Foundation/InspectorTab/NodeComponentInspector.h"
+#include "Foundation/InspectorTab/SceneProductionInspector.h"
 #include "Foundation/InspectorTab/PlaceholderResourceInspector.h"
 #include "Foundation/InspectorTab/PrefabInspector.h"
 #include "Foundation/InspectorTab/RenderPathInspector.h"
@@ -141,6 +142,7 @@ EditorApplication::EditorApplication(Context* context)
     editorPluginManager_->AddPlugin("Foundation.Inspector.Prefab", &Foundation_PrefabInspector);
     editorPluginManager_->AddPlugin("Foundation.Inspector.Material", &Foundation_MaterialInspector);
     editorPluginManager_->AddPlugin("Foundation.Inspector.NodeComponent", &Foundation_NodeComponentInspector);
+    editorPluginManager_->AddPlugin("Foundation.Inspector.SceneProduction", &Foundation_SceneProductionInspector);
     editorPluginManager_->AddPlugin("Foundation.Inspector.PlaceholderResource", &Foundation_PlaceholderResourceInspector);
     editorPluginManager_->AddPlugin("Foundation.Inspector.RenderPath", &Foundation_RenderPathInspector);
     editorPluginManager_->AddPlugin("Foundation.Inspector.SerializableResource", &Foundation_SerializableResourceInspector);
