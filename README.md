@@ -78,7 +78,7 @@ La couche P3 livrée étend World Fabric au-delà de l’éditeur et fournit les
 | **HotReloadStateStore** | Capture/restauration de champs runtime, générations de hot reload, validation, suppression et digest stable |
 | **CI native** | Job `blueprint-native-validation` couvrant Linux, Windows MSVC x64 et macOS arm64/x64 dans le workflow GitHub Actions |
 
-La validation locale de cette livraison a été effectuée sur une reconstruction propre Linux : **333/333 tests CTest passent**. La matrice CI prépare les validations natives Windows et macOS ; elle ne remplace pas encore un smoke test graphique exécuté sur chaque système.
+La validation locale de cette livraison a été effectuée sur une reconstruction propre Linux : **336/336 tests CTest passent**. La couverture inclut désormais des cas négatifs pour les branches déterministes, les JSON malformés, les doublons, le détachement causal et la canonicalisation de champs contenant des séparateurs. La matrice CI prépare les validations natives Windows et macOS ; elle ne remplace pas encore un smoke test graphique exécuté sur chaque système.
 
 ### Extensions uniques de production
 
@@ -181,4 +181,4 @@ rbfx-blueprint est distribué sous la licence MIT. Le projet est dérivé de rbf
 
 ## État de maturité
 
-rbfx-blueprint dispose maintenant d’un socle d’éditeur et de production nettement plus large qu’un prototype minimal : les ressources sont persistées, les contrats d’interface sont testés, World Fabric fournit une couche sémantique transversale, l’écosystème P3 est présent et **333/333 tests Linux passent** dans cette session. Une qualification « production industrielle » complète nécessite encore des tests de charge, des projets de référence, l’exécution des validations natives Windows/macOS, une documentation utilisateur plus étendue et des campagnes de stabilité longue durée.
+rbfx-blueprint dispose maintenant d’un socle d’éditeur et de production nettement plus large qu’un prototype minimal : les ressources sont persistées, les contrats d’interface sont testés, World Fabric fournit une couche sémantique transversale, l’écosystème P3/P4 est présent et **336/336 tests Linux passent** dans cette session. Une qualification « production industrielle » complète nécessite encore des tests de charge, des projets de référence, l’exécution des validations natives Windows/macOS, une documentation utilisateur plus étendue et des campagnes de stabilité longue durée.

@@ -264,25 +264,47 @@ bool SemanticBuildCapsule::FromJSON(const JSONValue& root, std::string* error)
 std::string SemanticBuildCapsule::ToCanonicalText() const
 {
     std::ostringstream stream;
-    stream << "version=1\n";
-    stream << "engineRevision=" << metadata_.engineRevision << '\n';
-    stream << "toolchain=" << metadata_.toolchain << '\n';
-    stream << "platform=" << metadata_.platform << '\n';
-    stream << "architecture=" << metadata_.architecture << '\n';
-    stream << "configuration=" << metadata_.configuration << '\n';
-    stream << "worldFabricDigest=" << metadata_.worldFabricDigest << '\n';
-    stream << "timeMachineDigest=" << metadata_.timeMachineDigest << '\n';
+    const auto writeField = [&stream](const char* key, const std::string& value)
+    {
+        stream << key << ':' << value.size() << ':' << value << '\n';
+    };
+    const auto writeUnsigned = [&writeField](const char* key, unsigned long long value)
+    {
+        writeField(key, std::to_string(value));
+    };
+
+    writeField("version", "1");
+    writeField("engineRevision", metadata_.engineRevision);
+    writeField("toolchain", metadata_.toolchain);
+    writeField("platform", metadata_.platform);
+    writeField("architecture", metadata_.architecture);
+    writeField("configuration", metadata_.configuration);
+    writeUnsigned("worldFabricDigest", metadata_.worldFabricDigest);
+    writeUnsigned("timeMachineDigest", metadata_.timeMachineDigest);
 
     std::vector<SemanticCapsuleEntry> entries = entries_;
     std::sort(entries.begin(), entries.end(), EntryLess);
     for (const SemanticCapsuleEntry& entry : entries)
-        stream << "entry|" << entry.path << '|' << entry.category << '|' << entry.platform << '|'
-               << entry.size << '|' << entry.contentDigest << '\n';
+    {
+        writeField("entry", "begin");
+        writeField("path", entry.path);
+        writeField("category", entry.category);
+        writeField("platform", entry.platform);
+        writeUnsigned("size", entry.size);
+        writeUnsigned("contentDigest", entry.contentDigest);
+        writeField("entry", "end");
+    }
 
     std::vector<SemanticCapsulePlugin> plugins = plugins_;
     std::sort(plugins.begin(), plugins.end(), PluginLess);
     for (const SemanticCapsulePlugin& plugin : plugins)
-        stream << "plugin|" << plugin.id << '|' << plugin.version << '|' << plugin.digest << '\n';
+    {
+        writeField("plugin", "begin");
+        writeField("id", plugin.id);
+        writeField("version", plugin.version);
+        writeUnsigned("digest", plugin.digest);
+        writeField("plugin", "end");
+    }
     return stream.str();
 }
 

@@ -113,3 +113,75 @@ TEST_CASE("Semantic build capsule validates serializes and diffs production evid
     CHECK(diff.changedPlugins == std::vector<std::string>{"rbfx.blueprint"});
     CHECK(capsule.ComputeDigest() != changed.ComputeDigest());
 }
+
+
+TEST_CASE("Unique production services reject invalid inputs deterministically", "[worldfabric][robustness]")
+{
+    UniversalDeterministicTimeMachine machine(4);
+    StringVariantMap initial;
+    initial["value"] = Variant(0);
+    REQUIRE(machine.Start(initial));
+
+    std::string error;
+    CHECK_FALSE(machine.CreateBranch("", 0, &error));
+    CHECK_FALSE(machine.CreateBranch("missing-checkpoint", 4, &error));
+    CHECK_FALSE(machine.SwitchBranch("missing", &error));
+    CHECK_FALSE(machine.Restore(99));
+    CHECK_FALSE(machine.ReplayTo(1, {}));
+
+    SemanticBuildCapsule invalid;
+    CHECK_FALSE(invalid.Validate(&error));
+
+    SemanticBuildCapsuleMetadata metadata;
+    metadata.engineRevision = "engine";
+    metadata.toolchain = "toolchain";
+    metadata.platform = "Linux";
+    metadata.architecture = "x86_64";
+    metadata.configuration = "Debug";
+    metadata.worldFabricDigest = 1;
+    invalid.SetMetadata(metadata);
+    CHECK(invalid.AddEntry({"asset", "asset", "Any", 1, 2}));
+    CHECK_FALSE(invalid.AddEntry({"asset", "asset", "Any", 1, 3}, &error));
+
+    JSONValue malformed(JSON_OBJECT);
+    SemanticBuildCapsule restored;
+    CHECK_FALSE(restored.FromJSON(malformed, &error));
+}
+
+TEST_CASE("Semantic build capsule canonicalization preserves delimiter-rich fields", "[worldfabric][capsule][robustness]")
+{
+    SemanticBuildCapsule capsule;
+    SemanticBuildCapsuleMetadata metadata;
+    metadata.engineRevision = "engine|revision\n2026";
+    metadata.toolchain = "tool:chain";
+    metadata.platform = "Linux";
+    metadata.architecture = "x86_64";
+    metadata.configuration = "Debug";
+    metadata.worldFabricDigest = 10;
+    metadata.timeMachineDigest = 20;
+    capsule.SetMetadata(metadata);
+    REQUIRE(capsule.AddEntry({"Assets/player|variant\n.scene", "scene|source", "Any", 1, 2}));
+    REQUIRE(capsule.AddPlugin({"plugin|sample", "1.0.0|dev", 3}));
+    REQUIRE(capsule.Validate());
+
+    const std::string canonical = capsule.ToCanonicalText();
+    const JSONValue json = capsule.ToJSON();
+    SemanticBuildCapsule restored;
+    REQUIRE(restored.FromJSON(json));
+    CHECK(restored.ToCanonicalText() == canonical);
+    CHECK(restored.ComputeDigest() == capsule.ComputeDigest());
+}
+
+TEST_CASE("Causal debugger records graph changes and remains safe across detach", "[worldfabric][causal][robustness]")
+{
+    WorldFabricGraph graph;
+    CausalWorldFabricDebugger debugger;
+    REQUIRE(debugger.Attach(&graph));
+    const WorldFabricId first = graph.AddNode("first", WorldFabricNodeKind::Asset, "Asset");
+    REQUIRE(first != InvalidWorldFabricId);
+    CHECK_FALSE(debugger.GetEvidence().empty());
+    debugger.Detach();
+    const size_t evidenceCount = debugger.GetEvidence().size();
+    graph.AddNode("second", WorldFabricNodeKind::Asset, "Asset");
+    CHECK(debugger.GetEvidence().size() == evidenceCount);
+}

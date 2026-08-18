@@ -950,8 +950,22 @@ void WorldFabricTab::OnResourceLoaded(const ea::string& resourceName)
 
 void WorldFabricTab::OnResourceUnloaded(const ea::string& resourceName)
 {
-    if (resourceName == GetActiveResourceName())
-        resource_.Reset();
+    if (resourceName != GetActiveResourceName())
+        return;
+
+    resource_.Reset();
+    collaboration_.SetGraph(nullptr);
+    deterministicSimulation_.Clear();
+    causalDebugger_.Detach();
+    causalDebugger_.Clear();
+    deterministicTimeMachine_.Clear();
+    semanticBuildCapsule_.Clear();
+    capsuleDigest_ = 0;
+    causalStatus_.clear();
+    capsuleStatus_.clear();
+    selectedNodeKey_.clear();
+    selectedDependencyLabel_.clear();
+    validationError_.clear();
 }
 
 void WorldFabricTab::OnActiveResourceChanged(const ea::string&, const ea::string& newResourceName)
@@ -959,6 +973,18 @@ void WorldFabricTab::OnActiveResourceChanged(const ea::string&, const ea::string
     if (newResourceName.empty())
     {
         resource_.Reset();
+        collaboration_.SetGraph(nullptr);
+        deterministicSimulation_.Clear();
+        causalDebugger_.Detach();
+        causalDebugger_.Clear();
+        deterministicTimeMachine_.Clear();
+        semanticBuildCapsule_.Clear();
+        capsuleDigest_ = 0;
+        causalStatus_.clear();
+        capsuleStatus_.clear();
+        selectedNodeKey_.clear();
+        selectedDependencyLabel_.clear();
+        validationError_.clear();
         return;
     }
     resource_ = GetSubsystem<ResourceCache>()->GetResource<WorldFabricGraphResource>(newResourceName);
