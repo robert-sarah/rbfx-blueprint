@@ -2,7 +2,10 @@
 
 #include "../Project/ResourceEditorTab.h"
 
+#include <Urho3D/WorldFabric/CausalWorldFabricDebugger.h>
 #include <Urho3D/WorldFabric/DeterministicSimulation.h>
+#include <Urho3D/WorldFabric/SemanticBuildCapsule.h>
+#include <Urho3D/WorldFabric/UniversalDeterministicTimeMachine.h>
 #include <Urho3D/WorldFabric/WorldFabricCollaboration.h>
 #include <Urho3D/WorldFabric/WorldFabricGraphResource.h>
 #include <Urho3D/WorldFabric/WorldFabricProfiler.h>
@@ -59,6 +62,9 @@ private:
     void RenderProfiler(const WorldFabricGraphResource& resource);
     void RenderCollaboration(const WorldFabricGraphResource& resource);
     void RenderDeterministicReproduction(const WorldFabricGraphResource& resource);
+    void RenderCausalDebugger(const WorldFabricGraphResource& resource);
+    void RenderTimeMachine(const WorldFabricGraphResource& resource);
+    void RenderBuildCapsule(const WorldFabricGraphResource& resource);
 
     SharedPtr<WorldFabricGraphResource> resource_;
     WorldFabricGraphResource preview_;
@@ -83,6 +89,13 @@ private:
     WorldFabricProfiler profiler_;
     WorldFabricCollaboration collaboration_;
     DeterministicSimulation deterministicSimulation_;
+    CausalWorldFabricDebugger causalDebugger_;
+    UniversalDeterministicTimeMachine deterministicTimeMachine_;
+    SemanticBuildCapsule semanticBuildCapsule_;
+    ea::string causalStatus_;
+    ea::string capsuleStatus_;
+    unsigned long long capsuleDigest_{};
+    int timeMachineStepDelta_{1};
 };
 
 } // namespace Urho3D

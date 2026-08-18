@@ -699,6 +699,197 @@ void WorldFabricTab::RenderDeterministicReproduction(const WorldFabricGraphResou
     }
 }
 
+void WorldFabricTab::RenderCausalDebugger(const WorldFabricGraphResource& resource)
+{
+    causalDebugger_.Attach(const_cast<WorldFabricGraph*>(&resource.GetGraph()));
+    ui::Separator();
+    ui::Text("Causal World Fabric Debugger");
+    ui::Text("Evidence: %u | History digest: %llu", static_cast<unsigned>(causalDebugger_.GetEvidence().size()),
+        causalDebugger_.ComputeDigest());
+
+    const WorldFabricNode* selected = FindNode(resource, selectedNodeKey_);
+    if (!selected)
+    {
+        ui::TextUnformatted("Select a node to inspect its causal history.");
+        return;
+    }
+
+    ui::Text("Target: %s", selected->key.c_str());
+    if (ui::Button("Record Diagnostic Evidence"))
+    {
+        causalDebugger_.RecordDiagnostic(selected->id, "WorldFabricEditor", "Manual editor diagnostic");
+        causalStatus_ = Format("Recorded diagnostic evidence for {}", selected->key);
+    }
+    if (!causalStatus_.empty())
+        ui::TextUnformatted(causalStatus_.c_str());
+
+    const CausalAnalysis analysis = causalDebugger_.Analyze(selected->id);
+    if (!analysis.found)
+    {
+        ui::TextUnformatted(analysis.summary.c_str());
+        return;
+    }
+    ui::Text("%s", analysis.summary.c_str());
+    ui::Text("Impacted semantic nodes: %u", static_cast<unsigned>(analysis.impactedNodes.size()));
+    for (const WorldFabricId id : analysis.impactedNodes)
+    {
+        const WorldFabricNode* node = resource.GetGraph().GetNode(id);
+        if (node)
+            ui::BulletText("%s", node->key.c_str());
+    }
+    if (ui::BeginTable("WorldFabricCausalChain", 4,
+            ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY,
+            ImVec2(0, 180)))
+    {
+        ui::TableSetupColumn("Sequence");
+        ui::TableSetupColumn("Node");
+        ui::TableSetupColumn("Source");
+        ui::TableSetupColumn("Message");
+        ui::TableHeadersRow();
+        for (const CausalEvidence& evidence : analysis.chain)
+        {
+            const WorldFabricNode* node = resource.GetGraph().GetNode(evidence.node);
+            ui::TableNextRow();
+            ui::TableSetColumnIndex(0);
+            ui::Text("%llu", evidence.sequence);
+            ui::TableSetColumnIndex(1);
+            ui::TextUnformatted(node ? node->key.c_str() : "missing");
+            ui::TableSetColumnIndex(2);
+            ui::TextUnformatted(evidence.source.c_str());
+            ui::TableSetColumnIndex(3);
+            ui::TextUnformatted(evidence.message.c_str());
+        }
+        ui::EndTable();
+    }
+}
+
+void WorldFabricTab::RenderTimeMachine(const WorldFabricGraphResource& resource)
+{
+    ui::Separator();
+    ui::Text("Universal Deterministic Time Machine");
+    ui::Text("Branch: %s | Frame: %u | Generation: %u | Digest: %llu",
+        deterministicTimeMachine_.GetCurrentBranch().c_str(), deterministicTimeMachine_.GetCurrentFrame(),
+        deterministicTimeMachine_.GetGeneration(), deterministicTimeMachine_.ComputeDigest());
+    ui::InputInt("Step delta", &timeMachineStepDelta_);
+    if (ui::Button("Start Universal Timeline"))
+    {
+        StringVariantMap initial;
+        initial["score"] = Variant(0);
+        initial["GraphDigest"] = Variant(Format("{}", resource.ComputeDigest()));
+        initial["SelectedNode"] = Variant(selectedNodeKey_);
+        deterministicTimeMachine_.Start(initial);
+        status_ = "Universal deterministic timeline started";
+    }
+    ui::SameLine();
+    if (ui::Button("Advance Timeline"))
+    {
+        StringVariantMap input;
+        input["delta"] = Variant(timeMachineStepDelta_);
+        const bool advanced = deterministicTimeMachine_.Advance(input,
+            [](unsigned, float, const StringVariantMap& inputState, const StringVariantMap& current,
+                StringVariantMap& next)
+            {
+                next = current;
+                const auto score = current.find("score");
+                const auto delta = inputState.find("delta");
+                next["score"] = Variant((score != current.end() ? score->second.GetInt() : 0)
+                    + (delta != inputState.end() ? delta->second.GetInt() : 0));
+                return true;
+            },
+            DeterministicTimeMachineDomain::Gameplay, "World Fabric editor step");
+        status_ = advanced ? Format("Timeline advanced to frame {}", deterministicTimeMachine_.GetCurrentFrame())
+                           : "Start the universal timeline before advancing";
+    }
+    ui::SameLine();
+    if (ui::Button("Create Investigation Branch"))
+    {
+        const unsigned checkpoint = deterministicTimeMachine_.GetCurrentFrame();
+        std::string error;
+        const bool created = deterministicTimeMachine_.CreateBranch("investigation", checkpoint ? checkpoint : 1, &error);
+        status_ = created ? "Created investigation branch" : Format("Unable to create branch: {}", error);
+    }
+    ui::SameLine();
+    if (ui::Button("Compare Main / Investigation"))
+    {
+        unsigned frame{};
+        DeterministicFrameDifference difference;
+        if (deterministicTimeMachine_.FindFirstDivergence("main", "investigation", frame, difference))
+            status_ = Format("First divergence at frame {} ({} changed keys)", frame, difference.changedKeys.size());
+        else
+            status_ = "No divergence found between the retained branches";
+    }
+    if (ui::BeginTable("WorldFabricUniversalTimeline", 4,
+            ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY,
+            ImVec2(0, 180)))
+    {
+        ui::TableSetupColumn("Frame");
+        ui::TableSetupColumn("Generation");
+        ui::TableSetupColumn("Digest");
+        ui::TableSetupColumn("Label");
+        ui::TableHeadersRow();
+        for (const DeterministicTimeMachineFrame& frame : deterministicTimeMachine_.GetFrames())
+        {
+            ui::TableNextRow();
+            ui::TableSetColumnIndex(0);
+            ui::Text("%u", frame.frame);
+            ui::TableSetColumnIndex(1);
+            ui::Text("%u", frame.generation);
+            ui::TableSetColumnIndex(2);
+            ui::Text("%llu", frame.digest);
+            ui::TableSetColumnIndex(3);
+            ui::TextUnformatted(frame.label.c_str());
+        }
+        ui::EndTable();
+    }
+}
+
+void WorldFabricTab::RenderBuildCapsule(const WorldFabricGraphResource& resource)
+{
+    ui::Separator();
+    ui::Text("Semantic Build Capsule");
+    ui::Text("Entries: %u | Plugins: %u | Capsule digest: %llu",
+        static_cast<unsigned>(semanticBuildCapsule_.GetEntries().size()),
+        static_cast<unsigned>(semanticBuildCapsule_.GetPlugins().size()), capsuleDigest_);
+    if (ui::Button("Capture Semantic Build Capsule"))
+    {
+        semanticBuildCapsule_.Clear();
+        SemanticBuildCapsuleMetadata metadata;
+        metadata.engineRevision = "rbfx-blueprint";
+        metadata.toolchain = "CMake/C++17";
+        metadata.platform = "Editor";
+        metadata.architecture = "native";
+        metadata.configuration = "development";
+        metadata.worldFabricDigest = resource.ComputeDigest();
+        metadata.timeMachineDigest = deterministicTimeMachine_.ComputeDigest();
+        semanticBuildCapsule_.SetMetadata(metadata);
+        for (const WorldFabricNode& node : resource.GetGraph().GetNodes())
+        {
+            SemanticCapsuleEntry entry;
+            entry.path = node.key.c_str();
+            entry.category = WorldFabricGraphResource::GetNodeKindName(node.kind);
+            entry.platform = "Any";
+            entry.size = node.metadata.size();
+            entry.contentDigest = node.id ^ metadata.worldFabricDigest;
+            if (entry.contentDigest == 0)
+                entry.contentDigest = node.id ? node.id : 1;
+            semanticBuildCapsule_.AddEntry(entry);
+        }
+        semanticBuildCapsule_.AddPlugin({"rbfx-blueprint", "P3", metadata.worldFabricDigest});
+        std::string error;
+        const bool valid = semanticBuildCapsule_.Validate(&error);
+        capsuleDigest_ = valid ? semanticBuildCapsule_.ComputeDigest() : 0;
+        capsuleStatus_ = valid ? Format("Captured valid capsule with {} semantic entries", semanticBuildCapsule_.GetEntries().size())
+                               : Format("Capsule validation failed: {}", error);
+    }
+    if (!capsuleStatus_.empty())
+        ui::TextUnformatted(capsuleStatus_.c_str());
+    const SemanticBuildCapsuleMetadata& metadata = semanticBuildCapsule_.GetMetadata();
+    ui::Text("World Fabric digest: %llu | Time Machine digest: %llu", metadata.worldFabricDigest,
+        metadata.timeMachineDigest);
+    for (const SemanticCapsuleEntry& entry : semanticBuildCapsule_.GetEntries())
+        ui::BulletText("%s [%s] digest=%llu", entry.path.c_str(), entry.category.c_str(), entry.contentDigest);
+}
+
 void WorldFabricTab::RenderContent()
 {
     WorldFabricGraphResource& resource = GetWorldFabric();
@@ -724,6 +915,9 @@ void WorldFabricTab::RenderContent()
     RenderProfiler(resource);
     RenderCollaboration(resource);
     RenderDeterministicReproduction(resource);
+    RenderCausalDebugger(resource);
+    RenderTimeMachine(resource);
+    RenderBuildCapsule(resource);
     if (!validationError_.empty())
         ui::TextColored(ImVec4(1.0f, 0.35f, 0.25f, 1.0f), "Error: %s", validationError_.c_str());
 }
@@ -742,6 +936,12 @@ void WorldFabricTab::OnResourceLoaded(const ea::string& resourceName)
     collaboration_.SetGraph(resource_ ? &resource_->GetGraph() : nullptr);
     collaboration_.AddClient(collaborationClientId_);
     deterministicSimulation_.Clear();
+    causalDebugger_.Clear();
+    deterministicTimeMachine_.Clear();
+    semanticBuildCapsule_.Clear();
+    capsuleDigest_ = 0;
+    causalStatus_.clear();
+    capsuleStatus_.clear();
     selectedNodeKey_.clear();
     selectedDependencyLabel_.clear();
     validationError_.clear();
@@ -765,6 +965,12 @@ void WorldFabricTab::OnActiveResourceChanged(const ea::string&, const ea::string
     collaboration_.SetGraph(resource_ ? &resource_->GetGraph() : nullptr);
     collaboration_.AddClient(collaborationClientId_);
     deterministicSimulation_.Clear();
+    causalDebugger_.Clear();
+    deterministicTimeMachine_.Clear();
+    semanticBuildCapsule_.Clear();
+    capsuleDigest_ = 0;
+    causalStatus_.clear();
+    capsuleStatus_.clear();
     selectedNodeKey_.clear();
     selectedDependencyLabel_.clear();
     validationError_.clear();

@@ -78,7 +78,19 @@ La couche P3 livrée étend World Fabric au-delà de l’éditeur et fournit les
 | **HotReloadStateStore** | Capture/restauration de champs runtime, générations de hot reload, validation, suppression et digest stable |
 | **CI native** | Job `blueprint-native-validation` couvrant Linux, Windows MSVC x64 et macOS arm64/x64 dans le workflow GitHub Actions |
 
-La validation locale de cette livraison a été effectuée sur une reconstruction propre Linux : **330/330 tests CTest passent**. La matrice CI prépare les validations natives Windows et macOS ; elle ne remplace pas encore un smoke test graphique exécuté sur chaque système.
+La validation locale de cette livraison a été effectuée sur une reconstruction propre Linux : **333/333 tests CTest passent**. La matrice CI prépare les validations natives Windows et macOS ; elle ne remplace pas encore un smoke test graphique exécuté sur chaque système.
+
+### Extensions uniques de production
+
+Les trois services suivants prolongent World Fabric au-delà d’un simple graphe de dépendances et sont intégrés dans `WorldFabricTab` :
+
+| Extension | Fonction professionnelle |
+| --- | --- |
+| **Causal World Fabric Debugger** | Capture des preuves causales séquencées, analyse des chaînes de dépendances, résumé de cause, calcul des nœuds impactés et diagnostic manuel depuis un nœud sélectionné. |
+| **Universal Deterministic Time Machine** | Historique borné multi-domaine, états et entrées par frame, restauration, replay, branches d’investigation, comparaison de frames et recherche de la première divergence entre branches. |
+| **Semantic Build Capsule** | Capsule JSON canonique regroupant environnement, digests World Fabric/Time Machine, entrées sémantiques et plugins, avec validation, empreinte déterministe et diff entre builds. |
+
+Ces services sont conçus comme des contrats runtime réutilisables par l’éditeur, la CI, le profiler, le réseau et les outils de support. Ils fournissent une base de traçabilité et de reproduction ; ils ne constituent pas encore à eux seuls une certification de production ou une capture automatique complète de tous les systèmes du moteur.
 
 ## Architecture du dépôt
 
@@ -169,4 +181,4 @@ rbfx-blueprint est distribué sous la licence MIT. Le projet est dérivé de rbf
 
 ## État de maturité
 
-rbfx-blueprint dispose maintenant d’un socle d’éditeur et de production nettement plus large qu’un prototype minimal : les ressources sont persistées, les contrats d’interface sont testés, World Fabric fournit une couche sémantique transversale, l’écosystème P3 est présent et **330/330 tests Linux passent** dans cette session. Une qualification « production industrielle » complète nécessite encore des tests de charge, des projets de référence, l’exécution des validations natives Windows/macOS, une documentation utilisateur plus étendue et des campagnes de stabilité longue durée.
+rbfx-blueprint dispose maintenant d’un socle d’éditeur et de production nettement plus large qu’un prototype minimal : les ressources sont persistées, les contrats d’interface sont testés, World Fabric fournit une couche sémantique transversale, l’écosystème P3 est présent et **333/333 tests Linux passent** dans cette session. Une qualification « production industrielle » complète nécessite encore des tests de charge, des projets de référence, l’exécution des validations natives Windows/macOS, une documentation utilisateur plus étendue et des campagnes de stabilité longue durée.
