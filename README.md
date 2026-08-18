@@ -1,5 +1,9 @@
 # rbfx-blueprint
 
+<p align="center">
+  <img src="Branding/rbfx-blueprint-logo-lockup.png" alt="rbfx-blueprint — C++ 2D and 3D game engine with Blueprint, rbscript and World Fabric" width="100%">
+</p>
+
 **rbfx-blueprint** is **version 0.7.0-production**, a **C++17 2D and 3D game engine and framework** based on the [rbfx](https://github.com/rbfx/rbfx) fork of [Urho3D](https://github.com/urho3d/Urho3D). It preserves the control of a code-first engine while adding an integrated production toolchain: an extensible editor, Blueprint visual graphs, the typed rbscript gameplay language, rendering and content tools, correlated diagnostics, and semantic orchestration through **World Fabric**.
 
 [![Native validation](https://github.com/robert-sarah/rbfx-blueprint/actions/workflows/build.yml/badge.svg?branch=blueprint-foundation)](https://github.com/robert-sarah/rbfx-blueprint/actions/workflows/build.yml)
