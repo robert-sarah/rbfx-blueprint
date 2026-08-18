@@ -60,6 +60,7 @@ public:
     bool Merge(const ea::vector<WorldFabricOperation>& operations, ea::string* error = nullptr);
 
     unsigned long long GetRevision() const { return revision_; }
+    const ea::vector<ea::string>& GetClients() const { return clients_; }
     const ea::vector<WorldFabricOperation>& GetHistory() const { return history_; }
     const ea::vector<WorldFabricLock>& GetLocks() const { return locks_; }
     const ea::string& GetLastError() const { return lastError_; }

@@ -2,6 +2,8 @@
 
 #include "../Project/ResourceEditorTab.h"
 
+#include <Urho3D/WorldFabric/DeterministicSimulation.h>
+#include <Urho3D/WorldFabric/WorldFabricCollaboration.h>
 #include <Urho3D/WorldFabric/WorldFabricGraphResource.h>
 #include <Urho3D/WorldFabric/WorldFabricProfiler.h>
 
@@ -55,6 +57,8 @@ private:
     void RenderImpactAnalysis(const WorldFabricGraphResource& resource);
     void RenderSemanticQuery(const WorldFabricGraphResource& resource);
     void RenderProfiler(const WorldFabricGraphResource& resource);
+    void RenderCollaboration(const WorldFabricGraphResource& resource);
+    void RenderDeterministicReproduction(const WorldFabricGraphResource& resource);
 
     SharedPtr<WorldFabricGraphResource> resource_;
     WorldFabricGraphResource preview_;
@@ -70,7 +74,15 @@ private:
     ea::string status_;
     ea::string validationError_;
     ea::string semanticQuery_;
+    ea::string collaborationClientId_{"editor"};
+    ea::string newCollaborationClientId_;
+    ea::string deterministicStatus_;
+    float deterministicFixedDelta_{1.0f / 60.0f};
+    unsigned deterministicCapacity_{128};
+    unsigned deterministicTargetFrame_{};
     WorldFabricProfiler profiler_;
+    WorldFabricCollaboration collaboration_;
+    DeterministicSimulation deterministicSimulation_;
 };
 
 } // namespace Urho3D

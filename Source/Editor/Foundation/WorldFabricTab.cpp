@@ -56,6 +56,19 @@ WorldFabricNode* FindNode(WorldFabricGraphResource& resource, const ea::string& 
     return const_cast<WorldFabricNode*>(FindNode(static_cast<const WorldFabricGraphResource&>(resource), key));
 }
 
+const char* GetOperationKindName(WorldFabricOperationKind kind)
+{
+    switch (kind)
+    {
+    case WorldFabricOperationKind::AddNode: return "AddNode";
+    case WorldFabricOperationKind::RemoveNode: return "RemoveNode";
+    case WorldFabricOperationKind::AddDependency: return "AddDependency";
+    case WorldFabricOperationKind::RemoveDependency: return "RemoveDependency";
+    case WorldFabricOperationKind::SetMetadata: return "SetMetadata";
+    }
+    return "Unknown";
+}
+
 } // namespace
 
 void Foundation_WorldFabricTab(Context* context, Project* project)
@@ -494,6 +507,198 @@ void WorldFabricTab::RenderProfiler(const WorldFabricGraphResource& resource)
     }
 }
 
+void WorldFabricTab::RenderCollaboration(const WorldFabricGraphResource& resource)
+{
+    collaboration_.SetGraph(const_cast<WorldFabricGraph*>(&resource.GetGraph()));
+    if (collaboration_.GetClients().empty())
+        collaboration_.AddClient(collaborationClientId_);
+
+    ui::Separator();
+    ui::Text("World Fabric Collaboration");
+    ui::Text("Revision: %llu | Clients: %u | Locks: %u | Operations: %u",
+        collaboration_.GetRevision(), collaboration_.GetClients().size(), collaboration_.GetLocks().size(),
+        collaboration_.GetHistory().size());
+
+    ui::InputText("Active client", &collaborationClientId_);
+    if (collaborationClientId_.empty())
+        collaborationClientId_ = "editor";
+    ui::SameLine();
+    if (ui::Button("Register Active Client"))
+    {
+        if (!collaboration_.AddClient(collaborationClientId_))
+            status_ = collaboration_.GetLastError();
+        else
+            status_ = Format("Registered collaboration client {}", collaborationClientId_);
+    }
+
+    ui::InputText("New client", &newCollaborationClientId_);
+    ui::SameLine();
+    if (ui::Button("Add Client"))
+    {
+        if (!collaboration_.AddClient(newCollaborationClientId_))
+            status_ = collaboration_.GetLastError();
+        else
+        {
+            status_ = Format("Added collaboration client {}", newCollaborationClientId_);
+            newCollaborationClientId_.clear();
+        }
+    }
+
+    const WorldFabricNode* selected = FindNode(resource, selectedNodeKey_);
+    if (selected)
+    {
+        ui::Text("Selected node: %s", selected->key.c_str());
+        if (ui::Button("Lock Selected Node"))
+        {
+            if (!collaboration_.Lock(selected->id, collaborationClientId_))
+                status_ = collaboration_.GetLastError();
+            else
+                status_ = Format("Locked {} for {}", selected->key, collaborationClientId_);
+        }
+        ui::SameLine();
+        if (ui::Button("Unlock Selected Node"))
+        {
+            if (!collaboration_.Unlock(selected->id, collaborationClientId_))
+                status_ = collaboration_.GetLastError();
+            else
+                status_ = Format("Unlocked {}", selected->key);
+        }
+    }
+    else
+        ui::TextUnformatted("Select a node to manage its collaboration lock.");
+
+    if (!collaboration_.GetLocks().empty())
+    {
+        ui::Text("Active locks");
+        for (const WorldFabricLock& lock : collaboration_.GetLocks())
+        {
+            const WorldFabricNode* node = resource.GetGraph().GetNode(lock.node);
+            ui::BulletText("%s -> %s (revision %llu)", node ? node->key.c_str() : "missing",
+                lock.clientId.c_str(), lock.revision);
+        }
+    }
+
+    ui::Text("Semantic Timeline / operation history");
+    if (collaboration_.GetHistory().empty())
+    {
+        ui::TextUnformatted("No collaboration operations have been submitted for this graph.");
+        return;
+    }
+    if (ui::BeginTable("WorldFabricSemanticTimeline", 5,
+            ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY,
+            ImVec2(0, 180)))
+    {
+        ui::TableSetupColumn("Revision");
+        ui::TableSetupColumn("Client");
+        ui::TableSetupColumn("Operation");
+        ui::TableSetupColumn("Node");
+        ui::TableSetupColumn("Target / key");
+        ui::TableHeadersRow();
+        for (const WorldFabricOperation& operation : collaboration_.GetHistory())
+        {
+            const WorldFabricNode* node = resource.GetGraph().GetNode(operation.node);
+            const WorldFabricNode* dependency = resource.GetGraph().GetNode(operation.dependency);
+            ui::TableNextRow();
+            ui::TableSetColumnIndex(0);
+            ui::Text("%llu", operation.revision);
+            ui::TableSetColumnIndex(1);
+            ui::TextUnformatted(operation.clientId.c_str());
+            ui::TableSetColumnIndex(2);
+            ui::TextUnformatted(GetOperationKindName(operation.kind));
+            ui::TableSetColumnIndex(3);
+            ui::TextUnformatted(node ? node->key.c_str() : operation.key.c_str());
+            ui::TableSetColumnIndex(4);
+            ui::TextUnformatted(dependency ? dependency->key.c_str() : operation.metadataKey.c_str());
+        }
+        ui::EndTable();
+    }
+}
+
+void WorldFabricTab::RenderDeterministicReproduction(const WorldFabricGraphResource& resource)
+{
+    ui::Separator();
+    ui::Text("Deterministic Reproduction");
+    ui::Text("Frame: %u | Fixed delta: %.6f s | Capacity: %u | State digest: %llu",
+        deterministicSimulation_.GetCurrentFrame(), deterministicSimulation_.GetFixedDelta(),
+        deterministicSimulation_.GetCapacity(), deterministicSimulation_.ComputeStateDigest());
+
+    ui::DragFloat("Fixed delta", &deterministicFixedDelta_, 0.0001f, 0.0001f, 1.0f, "%.6f s");
+    int capacity = static_cast<int>(deterministicCapacity_);
+    if (ui::InputInt("Snapshot capacity", &capacity))
+        deterministicCapacity_ = capacity > 2 ? static_cast<unsigned>(capacity) : 2;
+
+    if (ui::Button("Start"))
+    {
+        deterministicSimulation_.Configure(deterministicFixedDelta_, deterministicCapacity_);
+        StringVariantMap initialState;
+        initialState["GraphNodeCount"] = Variant(static_cast<int>(resource.GetGraph().GetNodes().size()));
+        initialState["SelectedNode"] = Variant(selectedNodeKey_);
+        initialState["GraphDigest"] = Variant(Format("{}", resource.ComputeDigest()));
+        deterministicSimulation_.Start(initialState);
+        deterministicTargetFrame_ = 0;
+        deterministicStatus_ = "Deterministic simulation started from the selected World Fabric graph state.";
+    }
+    ui::SameLine();
+    if (ui::Button("Advance One Frame"))
+    {
+        StringVariantMap input;
+        const bool advanced = deterministicSimulation_.Advance(input,
+            [](unsigned frame, float, const StringVariantMap&, const StringVariantMap&, StringVariantMap& nextState)
+            {
+                nextState["Frame"] = Variant(static_cast<int>(frame));
+                return true;
+            });
+        deterministicStatus_ = advanced ? Format("Advanced to deterministic frame {}", deterministicSimulation_.GetCurrentFrame())
+                                        : "Start a deterministic simulation before advancing.";
+    }
+
+    int targetFrame = static_cast<int>(deterministicTargetFrame_);
+    ui::InputInt("Target frame", &targetFrame);
+    deterministicTargetFrame_ = targetFrame > 0 ? static_cast<unsigned>(targetFrame) : 0;
+    ui::SameLine();
+    if (ui::Button("Restore"))
+    {
+        const bool restored = deterministicSimulation_.Restore(deterministicTargetFrame_);
+        deterministicStatus_ = restored ? Format("Restored deterministic frame {}", deterministicTargetFrame_)
+                                        : Format("Snapshot for frame {} is not available", deterministicTargetFrame_);
+    }
+    ui::SameLine();
+    if (ui::Button("Replay To"))
+    {
+        const bool replayed = deterministicSimulation_.ReplayTo(deterministicTargetFrame_,
+            [](unsigned frame, float, const StringVariantMap&, const StringVariantMap&, StringVariantMap& nextState)
+            {
+                nextState["Frame"] = Variant(static_cast<int>(frame));
+                return true;
+            });
+        deterministicStatus_ = replayed ? Format("Replayed deterministically to frame {}", deterministicTargetFrame_)
+                                        : "Replay requires retained inputs and a target at or after the current frame.";
+    }
+
+    if (!deterministicStatus_.empty())
+        ui::TextUnformatted(deterministicStatus_.c_str());
+    if (ui::BeginTable("WorldFabricDeterministicSnapshots", 3,
+            ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY,
+            ImVec2(0, 180)))
+    {
+        ui::TableSetupColumn("Frame");
+        ui::TableSetupColumn("Digest");
+        ui::TableSetupColumn("State entries");
+        ui::TableHeadersRow();
+        for (const DeterministicSnapshot& snapshot : deterministicSimulation_.GetSnapshots())
+        {
+            ui::TableNextRow();
+            ui::TableSetColumnIndex(0);
+            ui::Text("%u", snapshot.frame);
+            ui::TableSetColumnIndex(1);
+            ui::Text("%llu", snapshot.digest);
+            ui::TableSetColumnIndex(2);
+            ui::Text("%u", snapshot.state.size());
+        }
+        ui::EndTable();
+    }
+}
+
 void WorldFabricTab::RenderContent()
 {
     WorldFabricGraphResource& resource = GetWorldFabric();
@@ -517,6 +722,8 @@ void WorldFabricTab::RenderContent()
     RenderImpactAnalysis(resource);
     RenderSemanticQuery(resource);
     RenderProfiler(resource);
+    RenderCollaboration(resource);
+    RenderDeterministicReproduction(resource);
     if (!validationError_.empty())
         ui::TextColored(ImVec4(1.0f, 0.35f, 0.25f, 1.0f), "Error: %s", validationError_.c_str());
 }
@@ -532,6 +739,9 @@ void WorldFabricTab::RenderContextMenuItems()
 void WorldFabricTab::OnResourceLoaded(const ea::string& resourceName)
 {
     resource_ = GetSubsystem<ResourceCache>()->GetResource<WorldFabricGraphResource>(resourceName);
+    collaboration_.SetGraph(resource_ ? &resource_->GetGraph() : nullptr);
+    collaboration_.AddClient(collaborationClientId_);
+    deterministicSimulation_.Clear();
     selectedNodeKey_.clear();
     selectedDependencyLabel_.clear();
     validationError_.clear();
@@ -552,6 +762,9 @@ void WorldFabricTab::OnActiveResourceChanged(const ea::string&, const ea::string
         return;
     }
     resource_ = GetSubsystem<ResourceCache>()->GetResource<WorldFabricGraphResource>(newResourceName);
+    collaboration_.SetGraph(resource_ ? &resource_->GetGraph() : nullptr);
+    collaboration_.AddClient(collaborationClientId_);
+    deterministicSimulation_.Clear();
     selectedNodeKey_.clear();
     selectedDependencyLabel_.clear();
     validationError_.clear();
