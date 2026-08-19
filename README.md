@@ -141,7 +141,7 @@ The finalization layer adds twenty explicit, testable production gates and autho
 
 The new [`production-validation.yml`](.github/workflows/production-validation.yml) workflow configures and tests Linux, Windows and macOS, compiles the Editor on all three desktop runners, and runs a bounded graphical smoke test under Linux/Xvfb. A manual native GUI mode is available for hosted Windows/macOS runners, but release-grade graphical certification still requires a display-capable native machine and the target GPU drivers.
 
-The final version is intentionally described as a **production foundation**, not as a claim that every external SDK, GPU driver, installer signer, console kit or project-specific asset pipeline has been certified. This distinction keeps the release evidence reproducible and honest.
+The final version is intentionally described as a **production foundation**, not as a claim that every external SDK, GPU driver, installer signer, console kit or project-specific asset pipeline has been certified. This distinction keeps the release evidence reproducible and honest. The runnable desktop distribution contract, including the mandatory `CoreData` and `EditorData` directories, is documented in [`Documentation/RuntimePackaging.md`](Documentation/RuntimePackaging.md).
 
 ## Repository architecture
 
