@@ -552,9 +552,14 @@ void RbScriptTab::RenderTokenPreview(const Document& document)
         return;
 
     ui::BeginChild("##RbScriptPreview", ImVec2{0.0f, 190.0f}, true);
-    ui::Text("Lexical preview");
+    ui::Text("Syntax-colored preview");
+    ui::SameLine();
+    ui::TextDisabled("keywords blue | types cyan | strings green | comments gray | diagnostics red");
     ui::Separator();
 
+    ImFont* monoFont = Project::GetMonoFont();
+    if (monoFont)
+        ui::PushFont(monoFont);
     unsigned offset = 0;
     for (const RbScriptToken& token : document.tokens)
     {
@@ -574,14 +579,47 @@ void RbScriptTab::RenderTokenPreview(const Document& document)
             ui::SameLine(0.0f, 0.0f);
         offset = token.span.end.offset;
     }
+    if (monoFont)
+        ui::PopFont();
     ui::EndChild();
 }
 
-void RbScriptTab::RenderAutocomplete(const Document& document)
+void RbScriptTab::InsertCompletion(Document& document, const ea::string& completion)
+{
+    if (completion.empty())
+        return;
+
+    // InputTextMultiline is intentionally kept as a stable native editor. When
+    // a completion is clicked, replace the identifier currently being typed at
+    // the end of the active line; this gives a deterministic insertion path
+    // without relying on ImGui internals that differ between backends.
+    const ea::string before = activeSource_;
+    ea::string::size_type end = activeSource_.size();
+    while (end > 0 && (activeSource_[end - 1] == ' ' || activeSource_[end - 1] == '\t'))
+        --end;
+    ea::string::size_type start = end;
+    while (start > 0)
+    {
+        const char ch = activeSource_[start - 1];
+        if (!((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'))
+            break;
+        --start;
+    }
+
+    activeSource_ = activeSource_.substr(0, start) + completion + activeSource_.substr(end);
+    document.source = activeSource_;
+    document.dirty = true;
+    PushSourceEdit(before, activeSource_);
+    RefreshDocument(GetActiveResourceName(), autoCompile_);
+    status_ = Format("Inserted completion '{}'", completion);
+}
+
+void RbScriptTab::RenderAutocomplete(Document& document)
 {
     if (!ui::CollapsingHeader("Reflection autocomplete", ImGuiTreeNodeFlags_DefaultOpen))
         return;
 
+    ui::TextDisabled("Click a suggestion to replace the identifier at the end of the current source line.");
     ui::InputText("Completion filter", &searchText_);
     if (searchText_.empty())
         return;
@@ -605,9 +643,10 @@ void RbScriptTab::RenderAutocomplete(const Document& document)
             continue;
         if (shown++ >= 48)
             break;
-        ui::SameLine();
+        if (shown > 1)
+            ui::SameLine();
         if (ui::SmallButton(suggestion.c_str()))
-            status_ = Format("Suggestion: {}", suggestion);
+            InsertCompletion(document, suggestion);
     }
 }
 

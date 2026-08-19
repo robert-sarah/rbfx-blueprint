@@ -920,6 +920,28 @@ void SceneViewTab::RenderMenu()
     }
 }
 
+void SceneViewTab::Configure2DView(SceneViewPage& page, bool enabled)
+{
+    Camera* camera = page.renderer_->GetCamera();
+    Node* cameraNode = page.renderer_->GetCameraNode();
+    if (enabled)
+    {
+        camera->SetOrthographic(true);
+        camera->SetOrthoSize(50.0f);
+        cameraNode->SetPosition(Vector3{0.0f, 0.0f, -100.0f});
+        cameraNode->SetRotation(Quaternion::IDENTITY);
+        status_ = "2D mode: XY canvas, orthographic camera";
+    }
+    else
+    {
+        camera->SetOrthographic(false);
+        camera->SetFov(45.0f);
+        cameraNode->SetPosition(Vector3{0.0f, 3.0f, -10.0f});
+        cameraNode->SetRotation(Quaternion{15.0f, 0.0f, 0.0f});
+        status_ = "3D mode: perspective camera";
+    }
+}
+
 void SceneViewTab::RenderToolbar()
 {
     SceneViewPage* activePage = GetActivePage();
@@ -949,6 +971,16 @@ void SceneViewTab::RenderToolbar()
         const char* layoutTooltip = multiViewportEnabled_ ? "Use single scene viewport" : "Use four scene viewports";
         if (Widgets::ToolbarButton(layoutLabel, layoutTooltip, multiViewportEnabled_))
             multiViewportEnabled_ = !multiViewportEnabled_;
+
+        if (Widgets::ToolbarButton("2D", "Use a dedicated orthographic XY canvas", scene2DMode_))
+        {
+            scene2DMode_ = !scene2DMode_;
+            if (scene2DMode_)
+                multiViewportEnabled_ = false;
+            Configure2DView(*activePage, scene2DMode_);
+        }
+        ui::SameLine();
+        ui::TextDisabled("%s", scene2DMode_ ? "2D XY orthographic" : "3D perspective");
     }
 
     Widgets::ToolbarSeparator();
@@ -968,6 +1000,8 @@ bool SceneViewTab::CanOpenResource(const ResourceFileDescriptor& desc)
 void SceneViewTab::WriteIniSettings(ImGuiTextBuffer& output)
 {
     ResourceEditorTab::WriteIniSettings(output);
+    WriteIntToIni(output, "MultiViewport", multiViewportEnabled_ ? 1 : 0);
+    WriteIntToIni(output, "Scene2D", scene2DMode_ ? 1 : 0);
     for (SceneViewAddon* addon : addons_)
         addon->WriteIniSettings(output);
 }
@@ -975,6 +1009,10 @@ void SceneViewTab::WriteIniSettings(ImGuiTextBuffer& output)
 void SceneViewTab::ReadIniSettings(const char* line)
 {
     ResourceEditorTab::ReadIniSettings(line);
+    if (const auto value = ReadIntFromIni(line, "MultiViewport"))
+        multiViewportEnabled_ = *value != 0;
+    if (const auto value = ReadIntFromIni(line, "Scene2D"))
+        scene2DMode_ = *value != 0;
     for (SceneViewAddon* addon : addons_)
         addon->ReadIniSettings(line);
 }
@@ -1192,6 +1230,9 @@ void SceneViewTab::RenderContent()
 
     for (SceneViewPane& pane : activePage->multiViewports_)
         pane.renderer_->SetActive(false);
+
+    if (scene2DMode_)
+        Configure2DView(*activePage, true);
 
     const IntVector2 contentSize = GetContentSize();
     if (contentSize.x_ == 0 || contentSize.y_ == 0)

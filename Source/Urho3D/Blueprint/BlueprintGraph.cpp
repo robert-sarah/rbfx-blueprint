@@ -7,6 +7,9 @@
 #include <Urho3D/Core/StringUtils.h>
 #include <Urho3D/Resource/JSONFile.h>
 
+#include <algorithm>
+#include <cmath>
+
 namespace Urho3D
 {
 
@@ -949,30 +952,117 @@ ea::vector<BlueprintId> BlueprintGraph::SearchNodes(const ea::string& query) con
 
 void BlueprintGraph::AutoLayout(float horizontalSpacing, float verticalSpacing)
 {
-    ea::unordered_map<BlueprintId, unsigned> levels;
-    for (const BlueprintNode& node : nodes_)
-        levels[node.id] = 0;
-    for (unsigned pass = 0; pass < nodes_.size(); ++pass)
+    if (nodes_.empty())
+        return;
+
+    ea::unordered_map<BlueprintId, unsigned> indexById;
+    ea::vector<unsigned> indegree(nodes_.size(), 0);
+    ea::vector<ea::vector<unsigned>> outgoing(nodes_.size());
+    ea::vector<ea::vector<unsigned>> incoming(nodes_.size());
+    for (unsigned i = 0; i < nodes_.size(); ++i)
+        indexById[nodes_[i].id] = i;
+
+    for (const BlueprintLink& link : links_)
     {
-        bool changed = false;
-        for (const BlueprintLink& link : links_)
-        {
-            const unsigned nextLevel = levels[link.fromNode] + 1;
-            if (nextLevel > levels[link.toNode])
-            {
-                levels[link.toNode] = nextLevel;
-                changed = true;
-            }
-        }
-        if (!changed)
-            break;
+        const auto from = indexById.find(link.fromNode);
+        const auto to = indexById.find(link.toNode);
+        if (from == indexById.end() || to == indexById.end() || from->second == to->second)
+            continue;
+        outgoing[from->second].push_back(to->second);
+        incoming[to->second].push_back(from->second);
+        ++indegree[to->second];
     }
-    ea::unordered_map<unsigned, unsigned> rows;
-    for (BlueprintNode& node : nodes_)
+
+    // Kahn's algorithm gives deterministic ranks for normal graphs and avoids
+    // the unbounded level growth that the old relaxation loop caused on cycles.
+    ea::vector<unsigned> queue;
+    for (unsigned i = 0; i < indegree.size(); ++i)
     {
-        const unsigned level = levels[node.id];
-        const unsigned row = rows[level]++;
-        node.position = Vector2(level * horizontalSpacing, row * verticalSpacing);
+        if (indegree[i] == 0)
+            queue.push_back(i);
+    }
+    std::sort(queue.begin(), queue.end(), [&](unsigned lhs, unsigned rhs)
+    {
+        return nodes_[lhs].id < nodes_[rhs].id;
+    });
+
+    ea::vector<unsigned> rank(nodes_.size(), 0);
+    ea::vector<unsigned> topologicalOrder;
+    unsigned queueHead = 0;
+    while (queueHead < queue.size())
+    {
+        const unsigned current = queue[queueHead++];
+        topologicalOrder.push_back(current);
+        for (const unsigned next : outgoing[current])
+        {
+            rank[next] = std::max(rank[next], rank[current] + 1);
+            if (--indegree[next] == 0)
+                queue.push_back(next);
+        }
+    }
+
+    // Cyclic or disconnected leftovers are placed after the longest valid
+    // rank instead of being pushed farther away on every relaxation pass.
+    unsigned fallbackRank = 0;
+    for (const unsigned value : rank)
+        fallbackRank = std::max(fallbackRank, value);
+    for (unsigned i = 0; i < nodes_.size(); ++i)
+    {
+        if (indegree[i] != 0)
+            rank[i] = fallbackRank + 1;
+    }
+
+    unsigned maxRank = 0;
+    for (const unsigned value : rank)
+        maxRank = std::max(maxRank, value);
+    ea::vector<ea::vector<unsigned>> rows(maxRank + 1);
+    for (unsigned i = 0; i < nodes_.size(); ++i)
+        rows[rank[i]].push_back(i);
+
+    // Stable barycentric ordering keeps connected nodes close to their
+    // predecessors and makes the result reproducible across runs.
+    for (unsigned pass = 0; pass < 3; ++pass)
+    {
+        for (unsigned level = 1; level < rows.size(); ++level)
+        {
+            auto& row = rows[level];
+            std::sort(row.begin(), row.end(), [&](unsigned lhs, unsigned rhs)
+            {
+                auto average = [&](unsigned nodeIndex)
+                {
+                    float sum = 0.0f;
+                    unsigned count = 0;
+                    for (const unsigned predecessor : incoming[nodeIndex])
+                    {
+                        auto iter = std::find(rows[level - 1].begin(), rows[level - 1].end(), predecessor);
+                        if (iter != rows[level - 1].end())
+                        {
+                            sum += static_cast<float>(iter - rows[level - 1].begin());
+                            ++count;
+                        }
+                    }
+                    return count ? sum / static_cast<float>(count) : static_cast<float>(nodeIndex);
+                };
+                const float lhsAverage = average(lhs);
+                const float rhsAverage = average(rhs);
+                if (std::abs(lhsAverage - rhsAverage) > 0.01f)
+                    return lhsAverage < rhsAverage;
+                return nodes_[lhs].id < nodes_[rhs].id;
+            });
+        }
+    }
+
+    unsigned tallestRow = 0;
+    for (const auto& row : rows)
+        tallestRow = std::max(tallestRow, static_cast<unsigned>(row.size()));
+    for (unsigned level = 0; level < rows.size(); ++level)
+    {
+        const float rowOffset = (static_cast<float>(tallestRow) - static_cast<float>(rows[level].size())) * verticalSpacing * 0.5f;
+        for (unsigned row = 0; row < rows[level].size(); ++row)
+        {
+            BlueprintNode& node = nodes_[rows[level][row]];
+            node.position = Vector2(level * horizontalSpacing, rowOffset + row * verticalSpacing);
+        }
     }
 }
 

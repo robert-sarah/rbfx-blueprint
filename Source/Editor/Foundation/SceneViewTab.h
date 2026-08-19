@@ -322,6 +322,7 @@ private:
     void UpdateAddons(SceneViewPage& page);
     void UpdateCameraRay(SceneRendererToTexture* renderer = nullptr);
     void RenderMultiViewport(SceneViewPage& page);
+    void Configure2DView(SceneViewPage& page, bool enabled);
     bool UpdateDropToScene();
     void InspectSelection(SceneViewPage& page);
 
@@ -340,6 +341,8 @@ private:
 
     bool componentSelection_{true};
     bool multiViewportEnabled_{};
+    bool scene2DMode_{};
+    ea::string status_;
     unsigned activeViewportIndex_{};
 };
 

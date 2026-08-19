@@ -702,6 +702,7 @@ void BlueprintTab::RenderGraphCanvas()
 
 void BlueprintTab::RenderLinks(const ImVec2& canvasOrigin, ImDrawList* drawList)
 {
+    unsigned linkIndex = 0;
     for (const BlueprintLink& link : graph_.GetLinks())
     {
         const BlueprintNode* from = FindNode(link.fromNode);
@@ -734,12 +735,23 @@ void BlueprintTab::RenderLinks(const ImVec2& canvasOrigin, ImDrawList* drawList)
         if (!foundFrom || !foundTo)
             continue;
 
-        const ImVec2 fromPosition = GraphToScreen(from->position, canvasOrigin) + ImVec2{NodeWidth, GetPinY(*from, fromPinIndex)};
-        const ImVec2 toPosition = GraphToScreen(to->position, canvasOrigin) + ImVec2{0, GetPinY(*to, toPinIndex)};
-        const float distance = Max(40.0f, Abs(toPosition.x - fromPosition.x) * 0.5f);
+        const ImVec2 fromPosition = GraphToScreen(from->position, canvasOrigin) + ImVec2{NodeWidth * zoom_, GetPinY(*from, fromPinIndex) * zoom_};
+        const ImVec2 toPosition = GraphToScreen(to->position, canvasOrigin) + ImVec2{0, GetPinY(*to, toPinIndex) * zoom_};
+        const float direction = toPosition.x >= fromPosition.x ? 1.0f : -1.0f;
+        const float distance = Max(55.0f * zoom_, Abs(toPosition.x - fromPosition.x) * 0.5f);
+        const float laneOffset = (static_cast<float>(linkIndex % 3) - 1.0f) * 4.0f * zoom_;
+        const ImVec2 controlA = fromPosition + ImVec2{direction * distance, laneOffset};
+        const ImVec2 controlB = toPosition - ImVec2{direction * distance, laneOffset};
         const ImU32 color = PinColor(from->pins[fromPinIndex].dataType, IsExecutionPin(from->pins[fromPinIndex].kind));
-        drawList->AddBezierCubic(fromPosition, fromPosition + ImVec2{distance, 0},
-            toPosition - ImVec2{distance, 0}, toPosition, color, 2.5f);
+        drawList->AddBezierCubic(fromPosition, fromPosition + ImVec2{2.0f, 2.0f},
+            toPosition + ImVec2{2.0f, 2.0f}, toPosition, IM_COL32(0, 0, 0, 95), 5.0f * zoom_);
+        drawList->AddBezierCubic(fromPosition, controlA, controlB, toPosition, color, 2.5f * zoom_);
+
+        const ImVec2 arrowBase = toPosition - ImVec2{direction * 7.0f * zoom_, 0.0f};
+        const ImVec2 arrowTip = toPosition;
+        const ImVec2 arrowNormal{0.0f, 4.0f * zoom_};
+        drawList->AddTriangleFilled(arrowTip, arrowBase + arrowNormal, arrowBase - arrowNormal, color);
+        ++linkIndex;
     }
 }
 

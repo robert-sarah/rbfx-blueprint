@@ -86,7 +86,8 @@ private:
     void RenderDiagnostics(const Document& document);
     void RenderDebugPanel(Document& document);
     void RenderTokenPreview(const Document& document);
-    void RenderAutocomplete(const Document& document);
+    void RenderAutocomplete(Document& document);
+    void InsertCompletion(Document& document, const ea::string& completion);
     void RenderOutline(Document& document);
     void RenderConflictDialog();
     void RenderFindReplace(Document& document);

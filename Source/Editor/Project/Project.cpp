@@ -86,6 +86,19 @@ const char* const BlueprintTabId = "7fef95f7-42da-4ad1-9a32-3a7e9c1cc101";
 const char* const RbScriptTabId = "4e4bd5ec-5085-4f88-89f8-2fbead3c7a9f";
 const char* const ConsoleTabId = "2c1b8e59-3e21-4a14-bc20-d35af0ba5031";
 const char* const GameTabId = "212a6577-8a2a-42d6-aaed-042d226c724c";
+const char* const AnimationTabId = "a8e49ac3-8edb-493c-ac7e-0d42530c62fb";
+const char* const ShaderGraphTabId = "f0e5d0c1-31f5-4d70-bb75-5bfc9aa4f801";
+const char* const VfxGraphTabId = "d6bb45b1-1a0e-4ea7-8a5c-6b6df76f8d4d";
+const char* const AudioMixerTabId = "3e6d6aa6-0f73-4bc8-bca1-123456789abc";
+const char* const BuildDashboardTabId = "b17d7a03-6d3c-4d01-bf7c-1a3d2bd8a2b1";
+const char* const WorldFabricTabId = "a72d1f4b-4cde-4d85-8c4e-9e2c9f4a8b11";
+const char* const MultiplayerTabId = "6c4c5a92-6a2f-4b2f-9d8d-3a6b64e95e3d";
+const char* const SequencerTabId = "2d865d75-1d5f-4c43-8b32-12b4d9f7b6c8";
+
+bool MatchesTabId(const ea::string& id, const char* guid)
+{
+    return id == guid || id.ends_with(Format("###{}", guid));
+}
 
 bool IsWorkspaceTab(EditorWorkspace workspace, const ea::string& id)
 {
@@ -96,7 +109,7 @@ bool IsWorkspaceTab(EditorWorkspace workspace, const ea::string& id)
     {
         for (const char* candidate : ids)
         {
-            if (id == candidate)
+            if (MatchesTabId(id, candidate))
                 return true;
         }
         return false;
@@ -112,20 +125,104 @@ bool IsWorkspaceTab(EditorWorkspace workspace, const ea::string& id)
     case EditorWorkspace::Scripting:
         return isAnyOf({RbScriptTabId, HierarchyTabId, InspectorTabId, ResourcesTabId, ConsoleTabId});
     case EditorWorkspace::Animation:
-        return isAnyOf({"Animation", SceneTabId, HierarchyTabId, InspectorTabId, ResourcesTabId, ConsoleTabId});
+        return isAnyOf({AnimationTabId, SequencerTabId, SceneTabId, HierarchyTabId, InspectorTabId, ResourcesTabId, ConsoleTabId});
     case EditorWorkspace::Rendering:
-        return isAnyOf({SceneTabId, InspectorTabId, ResourcesTabId, ConsoleTabId});
+        return isAnyOf({ShaderGraphTabId, VfxGraphTabId, SceneTabId, InspectorTabId, ResourcesTabId, ConsoleTabId});
     case EditorWorkspace::Audio:
-        return isAnyOf({ResourcesTabId, ConsoleTabId});
+        return isAnyOf({AudioMixerTabId, ResourcesTabId, ConsoleTabId});
     case EditorWorkspace::Profiling:
         return isAnyOf({GameTabId, ConsoleTabId});
     case EditorWorkspace::WorldFabric:
-        return isAnyOf({ResourcesTabId, HierarchyTabId, InspectorTabId, ConsoleTabId});
+        return isAnyOf({WorldFabricTabId, ResourcesTabId, HierarchyTabId, InspectorTabId, ConsoleTabId});
     case EditorWorkspace::Build:
-        return isAnyOf({ResourcesTabId, ConsoleTabId});
+        return isAnyOf({BuildDashboardTabId, ResourcesTabId, ConsoleTabId});
     case EditorWorkspace::Layout:
     default:
         return true;
+    }
+}
+
+ImGuiID GetWorkspaceDockNode(EditorWorkspace workspace, const ea::string& id,
+    ImGuiID center, ImGuiID left, ImGuiID right, ImGuiID bottom)
+{
+    const bool isLeft = MatchesTabId(id, HierarchyTabId) || MatchesTabId(id, ResourcesTabId);
+    const bool isRight = MatchesTabId(id, InspectorTabId);
+    const bool isBottom = MatchesTabId(id, ConsoleTabId);
+
+    switch (workspace)
+    {
+    case EditorWorkspace::Blueprint:
+        if (isLeft)
+            return left;
+        if (isRight)
+            return right;
+        if (isBottom)
+            return bottom;
+        return center;
+    case EditorWorkspace::Scripting:
+        if (MatchesTabId(id, ResourcesTabId) || MatchesTabId(id, HierarchyTabId))
+            return left;
+        if (isRight)
+            return right;
+        if (isBottom)
+            return bottom;
+        return center;
+    case EditorWorkspace::Scene2D:
+    case EditorWorkspace::Scene3D:
+        if (MatchesTabId(id, HierarchyTabId))
+            return left;
+        if (isRight)
+            return right;
+        if (MatchesTabId(id, ResourcesTabId) || isBottom)
+            return bottom;
+        return center;
+    case EditorWorkspace::Animation:
+        if (MatchesTabId(id, HierarchyTabId) || MatchesTabId(id, ResourcesTabId))
+            return left;
+        if (isRight)
+            return right;
+        if (MatchesTabId(id, SequencerTabId) || isBottom)
+            return bottom;
+        return center;
+    case EditorWorkspace::Rendering:
+        if (MatchesTabId(id, ResourcesTabId))
+            return left;
+        if (isRight)
+            return right;
+        if (isBottom)
+            return bottom;
+        return center;
+    case EditorWorkspace::Audio:
+        if (MatchesTabId(id, ResourcesTabId))
+            return left;
+        if (isBottom)
+            return bottom;
+        return center;
+    case EditorWorkspace::Profiling:
+        return isBottom ? bottom : center;
+    case EditorWorkspace::WorldFabric:
+        if (isLeft)
+            return left;
+        if (isRight)
+            return right;
+        if (isBottom)
+            return bottom;
+        return center;
+    case EditorWorkspace::Build:
+        if (MatchesTabId(id, ResourcesTabId))
+            return left;
+        if (isBottom)
+            return bottom;
+        return center;
+    case EditorWorkspace::Layout:
+    default:
+        if (isLeft)
+            return left;
+        if (isRight)
+            return right;
+        if (isBottom)
+            return bottom;
+        return center;
     }
 }
 
@@ -799,33 +896,21 @@ void Project::ResetLayout()
 
     for (EditorTab* tab : tabs_)
     {
-        switch (tab->GetPlacement())
-        {
-        case EditorTabPlacement::DockCenter:
-            ui::DockBuilderDockWindow(tab->GetUniqueId().c_str(), dockCenter);
-            break;
-        case EditorTabPlacement::DockLeft:
-            ui::DockBuilderDockWindow(tab->GetUniqueId().c_str(), dockLeft);
-            break;
-        case EditorTabPlacement::DockRight:
-            ui::DockBuilderDockWindow(tab->GetUniqueId().c_str(), dockRight);
-            break;
-        case EditorTabPlacement::DockBottom:
-            ui::DockBuilderDockWindow(tab->GetUniqueId().c_str(), dockBottom);
-            break;
-        }
-    }
-    ui::DockBuilderFinish(dockspaceId_);
-
-    for (EditorTab* tab : tabs_)
-    {
         const bool isDefault = tab->GetFlags().Test(EditorTabFlag::OpenByDefault);
         const bool isRelevant = IsWorkspaceTab(activeWorkspace_, tab->GetUniqueId());
-        if (isRelevant && isDefault)
-            tab->Open();
-        else if (!isRelevant && isDefault)
+        const bool shouldOpen = activeWorkspace_ == EditorWorkspace::Layout ? isDefault : isRelevant;
+        if (!shouldOpen)
+        {
             tab->Close();
+            continue;
+        }
+
+        const ImGuiID dockNode = GetWorkspaceDockNode(activeWorkspace_, tab->GetUniqueId(),
+            dockCenter, dockLeft, dockRight, dockBottom);
+        ui::DockBuilderDockWindow(tab->GetUniqueId().c_str(), dockNode);
+        tab->Open();
     }
+    ui::DockBuilderFinish(dockspaceId_);
 }
 
 void Project::SetWorkspace(EditorWorkspace workspace)
@@ -836,16 +921,11 @@ void Project::SetWorkspace(EditorWorkspace workspace)
     activeWorkspace_ = workspace;
     pendingResetLayout_ = true;
 
+    // Applying a workspace is an explicit profile change: close every tab first,
+    // including tabs opened manually in the previous profile. ResetLayout will
+    // reopen only the tabs belonging to the selected workspace.
     for (EditorTab* tab : tabs_)
-    {
-        if (tab->GetFlags().Test(EditorTabFlag::OpenByDefault))
-        {
-            if (IsWorkspaceTab(activeWorkspace_, tab->GetUniqueId()))
-                tab->Open();
-            else
-                tab->Close();
-        }
-    }
+        tab->Close();
 }
 
 void Project::SetEditorTheme(EditorTheme theme)
