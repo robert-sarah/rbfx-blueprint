@@ -174,6 +174,38 @@ TEST_CASE("Rollback manager state digest is insertion-order independent")
     CHECK(RollbackManager::ComputeStateDigest(first) != RollbackManager::ComputeStateDigest(second));
 }
 
+TEST_CASE("Rollback manager enforces a bounded prediction window")
+{
+    RollbackManager rollback(8);
+    rollback.SetPredictionWindow(2);
+
+    StringVariantMap authoritative{{"tick", Variant(10)}};
+    StringVariantMap corrected;
+    CHECK(rollback.Reconcile(static_cast<NetworkFrame>(10), authoritative, {}, corrected));
+    CHECK(rollback.GetLatestAuthoritativeFrame() == static_cast<NetworkFrame>(10));
+    CHECK(rollback.GetPredictionDepth(static_cast<NetworkFrame>(12)) == 2);
+    CHECK(rollback.IsPredictionAllowed(static_cast<NetworkFrame>(12)));
+    CHECK_FALSE(rollback.IsPredictionAllowed(static_cast<NetworkFrame>(13)));
+}
+
+TEST_CASE("Rollback manager identifies the first divergent digest")
+{
+    RollbackManager rollback(8);
+    rollback.SaveState(static_cast<NetworkFrame>(1), StringVariantMap{{"tick", Variant(1)}});
+    rollback.SaveState(static_cast<NetworkFrame>(2), StringVariantMap{{"tick", Variant(2)}});
+    rollback.SaveState(static_cast<NetworkFrame>(3), StringVariantMap{{"tick", Variant(3)}});
+
+    ea::vector<RollbackDigestSample> authoritative;
+    authoritative.push_back({static_cast<NetworkFrame>(1), rollback.FindDigest(static_cast<NetworkFrame>(1))->digest});
+    authoritative.push_back({static_cast<NetworkFrame>(2), rollback.FindDigest(static_cast<NetworkFrame>(2))->digest});
+    authoritative.push_back({static_cast<NetworkFrame>(3), rollback.FindDigest(static_cast<NetworkFrame>(3))->digest + 1});
+
+    CHECK_FALSE(rollback.ValidateAuthoritativeDigests(authoritative));
+    CHECK(rollback.GetLastDiagnostics().comparedDigests == 3);
+    CHECK(rollback.GetLastDiagnostics().firstDivergentFrame == static_cast<NetworkFrame>(3));
+    CHECK(rollback.GetLastDiagnostics().desyncDetected);
+}
+
 TEST_CASE("Blueprint runtime exposes production network nodes")
 {
     BlueprintRuntime runtime;

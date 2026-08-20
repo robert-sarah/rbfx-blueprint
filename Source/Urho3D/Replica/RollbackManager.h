@@ -20,6 +20,13 @@ struct URHO3D_API RollbackInput
     StringVariantMap values;
 };
 
+/// Deterministic state digest associated with one simulation frame.
+struct URHO3D_API RollbackDigestSample
+{
+    NetworkFrame frame{NetworkFrame::Min};
+    unsigned long long digest{};
+};
+
 /// Evidence produced by the last authoritative reconciliation.
 struct URHO3D_API RollbackDiagnostics
 {
@@ -30,7 +37,10 @@ struct URHO3D_API RollbackDiagnostics
     unsigned replayedInputs{};
     unsigned predictedInputs{};
     unsigned rejectedInputs{};
+    unsigned comparedDigests{};
+    NetworkFrame firstDivergentFrame{NetworkFrame::Min};
     bool diverged{};
+    bool desyncDetected{};
 };
 
 /// Authoritative checkpoint that can be transported through any network layer.
@@ -57,6 +67,13 @@ public:
     unsigned GetCapacity() const { return capacity_; }
     void Clear();
 
+    /// Limit how far a local simulation may run ahead of the latest authority.
+    void SetPredictionWindow(unsigned frames) { predictionWindow_ = frames; }
+    unsigned GetPredictionWindow() const { return predictionWindow_; }
+    NetworkFrame GetLatestAuthoritativeFrame() const { return latestAuthoritativeFrame_; }
+    unsigned GetPredictionDepth(NetworkFrame frame) const;
+    bool IsPredictionAllowed(NetworkFrame frame) const;
+
     void RecordInput(const RollbackInput& input);
     void SaveState(NetworkFrame frame, const StringVariantMap& state);
     const StringVariantMap* FindState(NetworkFrame frame) const;
@@ -77,13 +94,25 @@ public:
     const RollbackDiagnostics& GetLastDiagnostics() const { return lastDiagnostics_; }
     static unsigned long long ComputeStateDigest(const StringVariantMap& state);
 
+    /// Compare one authoritative digest with the bounded predicted digest history.
+    bool ValidateAuthoritativeDigest(NetworkFrame frame, unsigned long long authoritativeDigest);
+    /// Compare an ordered batch and stop recording after the first divergent frame.
+    bool ValidateAuthoritativeDigests(const ea::vector<RollbackDigestSample>& authoritativeDigests);
+    const RollbackDigestSample* FindDigest(NetworkFrame frame) const;
+
     const ea::vector<RollbackInput>& GetInputs() const { return inputs_; }
+    const ea::vector<RollbackDigestSample>& GetDigests() const { return digests_; }
     const ea::vector<NetworkSnapshot>& GetStates() const { return states_; }
 
 private:
+    void SaveDigest(NetworkFrame frame, unsigned long long digest);
+
     unsigned capacity_{64};
+    unsigned predictionWindow_{8};
+    NetworkFrame latestAuthoritativeFrame_{NetworkFrame::Min};
     ea::vector<RollbackInput> inputs_;
     ea::vector<NetworkSnapshot> states_;
+    ea::vector<RollbackDigestSample> digests_;
     RollbackDiagnostics lastDiagnostics_;
 };
 

@@ -1,3 +1,4 @@
+// Copyright (c) 2026 rbfx-blueprint contributors.
 // SPDX-License-Identifier: MIT
 
 #include "RollbackManager.h"
@@ -5,6 +6,7 @@
 #include "SnapshotBuffer.h"
 
 #include <algorithm>
+#include <limits>
 
 namespace Urho3D
 {
@@ -44,13 +46,33 @@ void RollbackManager::SetCapacity(unsigned capacity)
         inputs_.erase(inputs_.begin());
     while (states_.size() > capacity_)
         states_.erase(states_.begin());
+    while (digests_.size() > capacity_)
+        digests_.erase(digests_.begin());
 }
 
 void RollbackManager::Clear()
 {
     inputs_.clear();
     states_.clear();
+    digests_.clear();
+    latestAuthoritativeFrame_ = NetworkFrame::Min;
     lastDiagnostics_ = {};
+}
+
+unsigned RollbackManager::GetPredictionDepth(NetworkFrame frame) const
+{
+    if (latestAuthoritativeFrame_ == NetworkFrame::Min || frame <= latestAuthoritativeFrame_)
+        return 0;
+
+    const long long depth = static_cast<long long>(frame) - static_cast<long long>(latestAuthoritativeFrame_);
+    if (depth >= static_cast<long long>(std::numeric_limits<unsigned>::max()))
+        return std::numeric_limits<unsigned>::max();
+    return static_cast<unsigned>(depth);
+}
+
+bool RollbackManager::IsPredictionAllowed(NetworkFrame frame) const
+{
+    return latestAuthoritativeFrame_ == NetworkFrame::Min || GetPredictionDepth(frame) <= predictionWindow_;
 }
 
 void RollbackManager::RecordInput(const RollbackInput& input)
@@ -81,6 +103,7 @@ void RollbackManager::SaveState(NetworkFrame frame, const StringVariantMap& stat
         if (current.frame == frame)
         {
             current.values = state;
+            SaveDigest(frame, ComputeStateDigest(state));
             return;
         }
     }
@@ -98,6 +121,31 @@ void RollbackManager::SaveState(NetworkFrame frame, const StringVariantMap& stat
     states_.insert(position, snapshot);
     while (states_.size() > capacity_)
         states_.erase(states_.begin());
+    SaveDigest(frame, ComputeStateDigest(state));
+}
+
+void RollbackManager::SaveDigest(NetworkFrame frame, unsigned long long digest)
+{
+    for (RollbackDigestSample& current : digests_)
+    {
+        if (current.frame == frame)
+        {
+            current.digest = digest;
+            return;
+        }
+    }
+
+    RollbackDigestSample sample;
+    sample.frame = frame;
+    sample.digest = digest;
+    const auto position = std::lower_bound(digests_.begin(), digests_.end(), frame,
+        [](const RollbackDigestSample& current, NetworkFrame value)
+        {
+            return IsBefore(current.frame, value);
+        });
+    digests_.insert(position, sample);
+    while (digests_.size() > capacity_)
+        digests_.erase(digests_.begin());
 }
 
 const StringVariantMap* RollbackManager::FindState(NetworkFrame frame) const
@@ -151,7 +199,14 @@ bool RollbackManager::Reconcile(NetworkFrame authoritativeFrame, const StringVar
     {
         lastDiagnostics_.predictedDigest = ComputeStateDigest(*predictedState);
         lastDiagnostics_.diverged = lastDiagnostics_.predictedDigest != authoritativeDigest;
+        if (lastDiagnostics_.diverged)
+        {
+            lastDiagnostics_.desyncDetected = true;
+            lastDiagnostics_.firstDivergentFrame = authoritativeFrame;
+        }
     }
+    if (latestAuthoritativeFrame_ == NetworkFrame::Min || authoritativeFrame > latestAuthoritativeFrame_)
+        latestAuthoritativeFrame_ = authoritativeFrame;
 
     for (const RollbackInput& input : inputs_)
     {
@@ -180,6 +235,49 @@ bool RollbackManager::Reconcile(NetworkFrame authoritativeFrame, const StringVar
     return true;
 }
 
+const RollbackDigestSample* RollbackManager::FindDigest(NetworkFrame frame) const
+{
+    for (const RollbackDigestSample& sample : digests_)
+    {
+        if (sample.frame == frame)
+            return &sample;
+    }
+    return nullptr;
+}
+
+bool RollbackManager::ValidateAuthoritativeDigest(NetworkFrame frame, unsigned long long authoritativeDigest)
+{
+    const RollbackDigestSample* predicted = FindDigest(frame);
+    if (!predicted)
+        return false;
+
+    lastDiagnostics_.authoritativeFrame = frame;
+    lastDiagnostics_.authoritativeDigest = authoritativeDigest;
+    lastDiagnostics_.predictedDigest = predicted->digest;
+    if (latestAuthoritativeFrame_ == NetworkFrame::Min || frame > latestAuthoritativeFrame_)
+        latestAuthoritativeFrame_ = frame;
+    ++lastDiagnostics_.comparedDigests;
+    if (predicted->digest == authoritativeDigest)
+        return true;
+
+    lastDiagnostics_.diverged = true;
+    lastDiagnostics_.desyncDetected = true;
+    lastDiagnostics_.firstDivergentFrame = frame;
+    return false;
+}
+
+bool RollbackManager::ValidateAuthoritativeDigests(
+    const ea::vector<RollbackDigestSample>& authoritativeDigests)
+{
+    lastDiagnostics_ = {};
+    for (const RollbackDigestSample& authoritative : authoritativeDigests)
+    {
+        if (!ValidateAuthoritativeDigest(authoritative.frame, authoritative.digest))
+            return false;
+    }
+    return true;
+}
+
 bool RollbackManager::ApplyResynchronization(const RollbackResynchronization& checkpoint,
     const RollbackSimulator& simulator, StringVariantMap& correctedState)
 {
@@ -191,6 +289,8 @@ bool RollbackManager::ApplyResynchronization(const RollbackResynchronization& ch
         lastDiagnostics_.authoritativeDigest = checkpoint.digest;
         lastDiagnostics_.correctedDigest = ComputeStateDigest(checkpoint.state);
         lastDiagnostics_.diverged = true;
+        lastDiagnostics_.desyncDetected = true;
+        lastDiagnostics_.firstDivergentFrame = checkpoint.frame;
         return false;
     }
 
