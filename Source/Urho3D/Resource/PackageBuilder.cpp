@@ -10,6 +10,7 @@
 
 #include <EASTL/sort.h>
 
+#include <algorithm>
 #include <cstdlib>
 
 #include "../DebugNew.h"
@@ -85,6 +86,8 @@ JSONValue PackageBuildProfile::ToJSON() const
     root.Set("outputPath", outputPath);
     root.Set("reproducible", reproducible);
     root.Set("worldFabricDigest", Format("{}", worldFabricDigest));
+    root.Set("buildGraphDigest", buildGraphDigest);
+    root.Set("assetCacheDigest", assetCacheDigest);
 
     JSONValue filters(JSON_ARRAY);
     for (const PackageAssetFilter& filter : assetFilters)
@@ -112,6 +115,8 @@ bool PackageBuildProfile::FromJSON(const JSONValue& value, ea::string* error)
     parsed.architecture = value.Contains("architecture") ? value["architecture"].GetString() : EMPTY_STRING;
     parsed.outputPath = value.Contains("outputPath") ? value["outputPath"].GetString() : EMPTY_STRING;
     parsed.reproducible = value.Contains("reproducible") ? value["reproducible"].GetBool(true) : true;
+    parsed.buildGraphDigest = value.Contains("buildGraphDigest") ? value["buildGraphDigest"].GetString() : EMPTY_STRING;
+    parsed.assetCacheDigest = value.Contains("assetCacheDigest") ? value["assetCacheDigest"].GetString() : EMPTY_STRING;
     if (value.Contains("worldFabricDigest"))
     {
         if (value["worldFabricDigest"].IsString())
@@ -199,6 +204,9 @@ JSONValue PackageManifest::ToJSON() const
     root.Set("platform", PackageBuilder::ToString(platform));
     root.Set("architecture", architecture);
     root.Set("worldFabricDigest", Format("{}", worldFabricDigest));
+    root.Set("buildGraphDigest", buildGraphDigest);
+    root.Set("assetCacheDigest", assetCacheDigest);
+    root.Set("provenanceDigest", provenanceDigest);
 
     ea::vector<PackageFileEntry> sortedFiles = files;
     ea::sort(sortedFiles.begin(), sortedFiles.end(), [](const PackageFileEntry& lhs, const PackageFileEntry& rhs)
@@ -216,6 +224,9 @@ JSONValue PackageManifest::ToJSON() const
         item.Set("packagePath", file.packagePath);
         item.Set("contentHash", file.contentHash);
         item.Set("size", Format("{}", file.size));
+        item.Set("contentDigest", file.contentDigest);
+        item.Set("importProfileDigest", file.importProfileDigest);
+        item.Set("provenance", file.provenance);
         entries.Push(ea::move(item));
     }
     root.Set("files", ea::move(entries));
@@ -234,6 +245,9 @@ bool PackageManifest::FromJSON(const JSONValue& value, ea::string* error)
     parsed.version = value.Contains("version") ? value["version"].GetUInt(1) : 1;
     parsed.profileName = value.Contains("profileName") ? value["profileName"].GetString() : EMPTY_STRING;
     parsed.architecture = value.Contains("architecture") ? value["architecture"].GetString() : EMPTY_STRING;
+    parsed.buildGraphDigest = value.Contains("buildGraphDigest") ? value["buildGraphDigest"].GetString() : EMPTY_STRING;
+    parsed.assetCacheDigest = value.Contains("assetCacheDigest") ? value["assetCacheDigest"].GetString() : EMPTY_STRING;
+    parsed.provenanceDigest = value.Contains("provenanceDigest") ? value["provenanceDigest"].GetString() : EMPTY_STRING;
     if (value.Contains("worldFabricDigest"))
     {
         if (value["worldFabricDigest"].IsString())
@@ -274,6 +288,9 @@ bool PackageManifest::FromJSON(const JSONValue& value, ea::string* error)
         file.sourcePath = item["sourcePath"].GetString();
         file.packagePath = item["packagePath"].GetString();
         file.contentHash = item.Contains("contentHash") ? item["contentHash"].GetUInt() : 0;
+        file.contentDigest = item.Contains("contentDigest") ? item["contentDigest"].GetString() : EMPTY_STRING;
+        file.importProfileDigest = item.Contains("importProfileDigest") ? item["importProfileDigest"].GetString() : EMPTY_STRING;
+        file.provenance = item.Contains("provenance") ? item["provenance"].GetString() : EMPTY_STRING;
         if (item.Contains("size") && item["size"].IsString())
         {
             if (!ParseUnsignedString(item["size"].GetString(), file.size))
@@ -418,6 +435,51 @@ PackageValidationResult PackageBuilder::ValidateManifest(const PackageManifest& 
     return result;
 }
 
+unsigned long long PackageManifest::ComputeDigest() const
+{
+    const PackageValidationResult validation = PackageBuilder::ValidateManifest(*this);
+    if (!validation.valid)
+        return 0;
+
+    ea::vector<PackageFileEntry> sortedFiles = files;
+    std::sort(sortedFiles.begin(), sortedFiles.end(), [](const PackageFileEntry& lhs, const PackageFileEntry& rhs)
+    {
+        if (lhs.packagePath != rhs.packagePath)
+            return lhs.packagePath < rhs.packagePath;
+        return lhs.sourcePath < rhs.sourcePath;
+    });
+
+    unsigned long long digest = 1469598103934665603ull;
+    const auto mix = [&digest](const ea::string& value)
+    {
+        for (const unsigned char character : value)
+        {
+            digest ^= character;
+            digest *= 1099511628211ull;
+        }
+        digest ^= 0xffu;
+        digest *= 1099511628211ull;
+    };
+    mix(Format("{}", version));
+    mix(profileName);
+    mix(PackageBuilder::ToString(platform));
+    mix(architecture);
+    mix(Format("{}", worldFabricDigest));
+    mix(buildGraphDigest);
+    mix(assetCacheDigest);
+    for (const PackageFileEntry& file : sortedFiles)
+    {
+        mix(file.sourcePath);
+        mix(file.packagePath);
+        mix(Format("{}", file.contentHash));
+        mix(Format("{}", file.size));
+        mix(file.contentDigest);
+        mix(file.importProfileDigest);
+        mix(file.provenance);
+    }
+    return digest;
+}
+
 bool PackageBuilder::BuildManifest(const PackageBuildProfile& profile, const ea::vector<PackageFileEntry>& candidates,
     PackageManifest& manifest, ea::string* error)
 {
@@ -433,6 +495,8 @@ bool PackageBuilder::BuildManifest(const PackageBuildProfile& profile, const ea:
     built.platform = profile.platform;
     built.architecture = profile.architecture;
     built.worldFabricDigest = profile.worldFabricDigest;
+    built.buildGraphDigest = profile.buildGraphDigest;
+    built.assetCacheDigest = profile.assetCacheDigest;
     for (const PackageFileEntry& candidate : candidates)
     {
         if (profile.IncludesAsset(candidate.sourcePath))
@@ -445,6 +509,7 @@ bool PackageBuilder::BuildManifest(const PackageBuildProfile& profile, const ea:
         SetError(error, manifestValidation.errors.empty() ? "Invalid package manifest." : manifestValidation.errors.front());
         return false;
     }
+    built.provenanceDigest = Format("{}", built.ComputeDigest());
     manifest = ea::move(built);
     return true;
 }

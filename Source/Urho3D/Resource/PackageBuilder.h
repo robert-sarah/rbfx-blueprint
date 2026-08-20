@@ -50,6 +50,10 @@ struct URHO3D_API PackageBuildProfile
     bool reproducible{true};
     /// Optional semantic graph digest used to make World Fabric-aware exports reproducible.
     unsigned long long worldFabricDigest{};
+    /// Digest of the BuildGraph recipe used to produce this package.
+    ea::string buildGraphDigest;
+    /// Digest of the asset-cache manifest used as package input.
+    ea::string assetCacheDigest;
     ea::vector<PackageAssetFilter> assetFilters;
 
     JSONValue ToJSON() const;
@@ -63,6 +67,12 @@ struct URHO3D_API PackageFileEntry
     ea::string packagePath;
     unsigned contentHash{};
     unsigned long long size{};
+    /// Optional content-addressed digest of the cooked artifact.
+    ea::string contentDigest;
+    /// Optional digest of the import profile that produced the artifact.
+    ea::string importProfileDigest;
+    /// Stable source/provenance label for audit and reproduction.
+    ea::string provenance;
 };
 
 /// Manifest describing the exact files emitted by one package build.
@@ -74,10 +84,17 @@ struct URHO3D_API PackageManifest
     ea::string architecture;
     /// Digest of the semantic graph used to produce this manifest, or zero when not bound.
     unsigned long long worldFabricDigest{};
+    /// Digest of the BuildGraph recipe used to produce this manifest.
+    ea::string buildGraphDigest;
+    /// Digest of the asset-cache manifest used as package input.
+    ea::string assetCacheDigest;
+    /// Digest of the canonical manifest payload, computed after validation.
+    ea::string provenanceDigest;
     ea::vector<PackageFileEntry> files;
 
     JSONValue ToJSON() const;
     bool FromJSON(const JSONValue& value, ea::string* error = nullptr);
+    unsigned long long ComputeDigest() const;
 };
 
 struct URHO3D_API PackageValidationResult

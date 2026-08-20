@@ -8,7 +8,7 @@ The following evidence was recorded from the `blueprint-foundation` branch after
 | --- | --- | --- |
 | Linux CMake configuration | Passed | Testing configuration completed with editor and player disabled |
 | `Tests` target compilation | Passed | Catch2 test binary built successfully |
-| Coherent full CTest run after model-import validation | **411/411 passed** | No failed test cases in the reconfigured Linux build; BuildGraph cooking-plan, editor production validation, model-import profile and AssetPipeline integration tests are included |
+| Coherent full CTest run after packaging provenance validation | **413/413 passed** | No failed test cases in the reconfigured Linux build; BuildGraph cooking-plan, editor production validation, model-import profile, AssetPipeline integration and package-provenance tests are included |
 | Rollback diagnostics | Covered | Prediction, authoritative digest comparison, divergence reporting, and resynchronization are exercised |
 | 1v1 competitive demo | Covered | Delayed remote input creates measurable divergence and rollback restores exact convergence |
 | Time-machine replay persistence | Covered | JSON export/import is round-tripped and tampered digests are rejected atomically |
@@ -21,6 +21,7 @@ The following evidence was recorded from the `blueprint-foundation` branch after
 | Shader Graph hardening | Passed | Validation and HLSL sampler tests pass in the coherent full Tests build; mixing old and new shared-library ABI artifacts remains invalid |
 | Editor production validation | Passed | 2D, 3D, Blueprint, RbScript and Shader Graph reference scenarios validate; unsafe scene, autosave, recovery and asset states produce stable diagnostics |
 | Model import profile | Passed | Units, axes, handedness, tangents, UV policy, descending LOD thresholds, provenance, JSON completeness and digest normalization are covered |
+| Package manifest provenance | Passed | Recipe/cache digests and per-file content, import-profile and BuildGraph provenance survive canonical JSON round-trips and insertion-order changes |
 | Windows runtime package | Available | The fixed package uses a statically linked C++ runtime and includes the required runtime resources |
 
 The test command used for the clean Linux evidence was:
@@ -38,11 +39,11 @@ ctest --test-dir build-tests --output-on-failure
 The final coherent model-import validation CTest report is:
 
 ```text
-100% tests passed, 0 tests failed out of 411
+100% tests passed, 0 tests failed out of 413
 Total Test time (real) = 250.60 sec
 ```
 
-The phase 9 cases cover case-insensitive model extensions, empty source data, missing cooked output paths, mismatched importer profiles, and normalized rule removal. The phase 10 cases cover required metadata for LOD, texture and provenance tasks, plus digest stability under metadata insertion-order changes. The phase 11 cases cover reference editor workspaces, 2D/3D exclusivity, autosave bounds and readiness, recovery warnings, and stable validation digests. The model-import cases cover complete profile JSON round trips, format normalization, unsafe units/UV/LOD values, schema completeness, provenance-sensitive digests, effective AssetImportSettings JSON persistence, cache-hash participation, early importer rejection, cache reuse, and profile-driven invalidation. They are included in the 411 registered Catch2 cases.
+The phase 9 cases cover case-insensitive model extensions, empty source data, missing cooked output paths, mismatched importer profiles, and normalized rule removal. The phase 10 cases cover required metadata for LOD, texture and provenance tasks, plus digest stability under metadata insertion-order changes. The phase 11 cases cover reference editor workspaces, 2D/3D exclusivity, autosave bounds and readiness, recovery warnings, and stable validation digests. The model-import cases cover complete profile JSON round trips, format normalization, unsafe units/UV/LOD values, schema completeness, provenance-sensitive digests, effective AssetImportSettings JSON persistence, cache-hash participation, early importer rejection, cache reuse, and profile-driven invalidation. The packaging cases cover recipe and cache identifiers, per-file provenance, canonical manifest digests, and round-trip stability. They are included in the 413 registered Catch2 cases.
 
 ## Published commits
 
@@ -71,7 +72,7 @@ All commits through `deb2923` are published on [`blueprint-foundation`](https://
 
 ## Evidence boundaries
 
-This evidence is strong for the deterministic contracts and testable production services covered by the repository. The 411/411 result comes from one coherent Linux build directory after the model-import changes; it is not assembled by mixing objects or shared libraries from different configurations. It is not a substitute for native graphical certification on every supported operating system, a long-duration network soak under the target packet-loss profile, or validation of a specific commercial game's third-party physics, audio, rendering, or platform middleware. Those checks remain release gates for each project that adopts the engine.
+This evidence is strong for the deterministic contracts and testable production services covered by the repository. The 413/413 result comes from one coherent Linux build directory after the packaging provenance changes; it is not assembled by mixing objects or shared libraries from different configurations. It is not a substitute for native graphical certification on every supported operating system, a long-duration network soak under the target packet-loss profile, or validation of a specific commercial game's third-party physics, audio, rendering, or platform middleware. Those checks remain release gates for each project that adopts the engine.
 
 ## References
 
