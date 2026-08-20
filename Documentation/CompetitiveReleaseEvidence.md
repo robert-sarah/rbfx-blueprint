@@ -8,7 +8,7 @@ The following evidence was recorded from the `blueprint-foundation` branch after
 | --- | --- | --- |
 | Linux CMake configuration | Passed | Testing configuration completed with editor and player disabled |
 | `Tests` target compilation | Passed | Catch2 test binary built successfully |
-| Coherent full CTest run after phase 10 | **403/403 passed** | No failed test cases in the fresh Linux build; the BuildGraph cooking-plan validation tests are included |
+| Coherent full CTest run after phase 11 | **406/406 passed** | No failed test cases in the reconfigured Linux build; BuildGraph cooking-plan and editor production validation tests are included |
 | Rollback diagnostics | Covered | Prediction, authoritative digest comparison, divergence reporting, and resynchronization are exercised |
 | 1v1 competitive demo | Covered | Delayed remote input creates measurable divergence and rollback restores exact convergence |
 | Time-machine replay persistence | Covered | JSON export/import is round-tripped and tampered digests are rejected atomically |
@@ -19,6 +19,7 @@ The following evidence was recorded from the `blueprint-foundation` branch after
 | Terrain authoring core | Passed | Deterministic falloffs, quantized stamping, digest stability, and invalid settings are covered by targeted compilation and smoke validation |
 | World Fabric terrain panel | Passed | `WorldFabricTab.cpp` compiles with the new authoring state and ImGui controls using the editor include configuration |
 | Shader Graph hardening | Passed | Validation and HLSL sampler tests pass in the coherent full Tests build; mixing old and new shared-library ABI artifacts remains invalid |
+| Editor production validation | Passed | 2D, 3D, Blueprint, RbScript and Shader Graph reference scenarios validate; unsafe scene, autosave, recovery and asset states produce stable diagnostics |
 | Windows runtime package | Available | The fixed package uses a statically linked C++ runtime and includes the required runtime resources |
 
 The test command used for the clean Linux evidence was:
@@ -33,14 +34,14 @@ cmake --build build-tests --target Tests -j2
 ctest --test-dir build-tests --output-on-failure
 ```
 
-The final coherent post-phase-10 CTest report is:
+The final coherent post-phase-11 CTest report is:
 
 ```text
-100% tests passed, 0 tests failed out of 403
-Total Test time (real) = 244.43 sec
+100% tests passed, 0 tests failed out of 406
+Total Test time (real) = 247.59 sec
 ```
 
-The phase 9 cases cover case-insensitive model extensions, empty source data, missing cooked output paths, mismatched importer profiles, and normalized rule removal. The phase 10 cases cover required metadata for LOD, texture and provenance tasks, plus digest stability under metadata insertion-order changes. They are included in the 403 registered Catch2 cases.
+The phase 9 cases cover case-insensitive model extensions, empty source data, missing cooked output paths, mismatched importer profiles, and normalized rule removal. The phase 10 cases cover required metadata for LOD, texture and provenance tasks, plus digest stability under metadata insertion-order changes. They are included in the 406 registered Catch2 cases. The phase 11 cases cover reference editor workspaces, 2D/3D exclusivity, autosave bounds and readiness, recovery warnings, and stable validation digests.
 
 ## Published commits
 
@@ -61,12 +62,14 @@ The phase 9 cases cover case-insensitive model extensions, empty source data, mi
 | `871762f` | Correct terrain falloff test assertion and preserve deterministic decay guarantees |
 | `a7c3718` | Record coherent 399-test validation and clarify source-test counting |
 | `ad138b5` | Harden deterministic asset import validation and publish the 401/401 evidence |
+| `3730cd2` | Add deterministic BuildGraph LOD, texture and provenance task schemas |
+| `deb2923` | Add editor production validation scenarios and CMake test integration |
 
 All listed commits are published on [`blueprint-foundation`](https://github.com/robert-sarah/rbfx-blueprint/tree/blueprint-foundation).
 
 ## Evidence boundaries
 
-This evidence is strong for the deterministic contracts and testable production services covered by the repository. The 403/403 result comes from one coherent Linux build directory after the phase 10 changes; it is not assembled by mixing objects or shared libraries from different configurations. It is not a substitute for native graphical certification on every supported operating system, a long-duration network soak under the target packet-loss profile, or validation of a specific commercial game's third-party physics, audio, rendering, or platform middleware. Those checks remain release gates for each project that adopts the engine.
+This evidence is strong for the deterministic contracts and testable production services covered by the repository. The 406/406 result comes from one coherent Linux build directory after the phase 11 changes; it is not assembled by mixing objects or shared libraries from different configurations. It is not a substitute for native graphical certification on every supported operating system, a long-duration network soak under the target packet-loss profile, or validation of a specific commercial game's third-party physics, audio, rendering, or platform middleware. Those checks remain release gates for each project that adopts the engine.
 
 ## References
 
