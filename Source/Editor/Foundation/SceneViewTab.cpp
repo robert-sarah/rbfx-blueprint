@@ -48,6 +48,7 @@
 #include <IconFontCppHeaders/IconsFontAwesome6.h>
 
 #include <algorithm>
+#include <cmath>
 
 namespace Urho3D
 {
@@ -197,6 +198,20 @@ SceneViewPage::SceneViewPage(SceneResource* resource)
 
 SceneViewPage::~SceneViewPage()
 {
+}
+
+void SceneViewPage::SerializeInBlock(Archive& archive)
+{
+    SerializeOptionalValue(archive, "Scene2DGridEnabled", scene2DGridEnabled_, AlwaysSerialize{});
+    SerializeOptionalValue(archive, "Scene2DSnapEnabled", scene2DSnapEnabled_, AlwaysSerialize{});
+    SerializeOptionalValue(archive, "Scene2DGridSpacing", scene2DGridSpacing_, AlwaysSerialize{});
+    SerializeOptionalValue(archive, "Scene2DSnapSpacing", scene2DSnapSpacing_, AlwaysSerialize{});
+
+    if (archive.IsInput())
+    {
+        scene2DGridSpacing_ = Clamp(scene2DGridSpacing_, 0.1f, 1000.0f);
+        scene2DSnapSpacing_ = Clamp(scene2DSnapSpacing_, 0.1f, 1000.0f);
+    }
 }
 
 ea::any& SceneViewPage::GetAddonData(const SceneViewAddon& addon)
@@ -942,6 +957,83 @@ void SceneViewTab::Configure2DView(SceneViewPage& page, bool enabled)
     }
 }
 
+void SceneViewTab::RenderScene2DGrid(const SceneViewPage& page) const
+{
+    if (!scene2DMode_ || !page.scene2DGridEnabled_ || page.contentArea_.min_.x_ >= page.contentArea_.max_.x_
+        || page.contentArea_.min_.y_ >= page.contentArea_.max_.y_)
+    {
+        return;
+    }
+
+    Camera* camera = page.renderer_->GetCamera();
+    if (!camera || !camera->IsOrthographic())
+        return;
+
+    const float spacing = Clamp(page.scene2DGridSpacing_, 0.1f, 1000.0f);
+    const Vector2 areaMin = page.contentArea_.min_;
+    const Vector2 areaMax = page.contentArea_.max_;
+    const Vector2 areaSize = areaMax - areaMin;
+
+    auto screenToXY = [&](float x, float y) -> ea::optional<Vector2>
+    {
+        const Ray ray = camera->GetScreenRay(x, y);
+        if (Abs(ray.direction_.z_) < M_EPSILON)
+            return ea::nullopt;
+        const float distance = -ray.origin_.z_ / ray.direction_.z_;
+        if (distance < 0.0f || !std::isfinite(distance))
+            return ea::nullopt;
+        const Vector3 point = ray.origin_ + ray.direction_ * distance;
+        return Vector2{point.x_, point.y_};
+    };
+
+    const ea::optional<Vector2> topLeft = screenToXY(0.0f, 0.0f);
+    const ea::optional<Vector2> bottomRight = screenToXY(1.0f, 1.0f);
+    if (!topLeft || !bottomRight)
+        return;
+
+    const float left = std::min(topLeft->x_, bottomRight->x_);
+    const float right = std::max(topLeft->x_, bottomRight->x_);
+    const float bottom = std::min(topLeft->y_, bottomRight->y_);
+    const float top = std::max(topLeft->y_, bottomRight->y_);
+    const float pixelsPerUnit = areaSize.y_ / std::max(camera->GetOrthoSize(), 0.001f);
+
+    // Keep the overlay bounded at extreme zoom levels while preserving the requested spacing.
+    float drawSpacing = spacing;
+    while (drawSpacing * pixelsPerUnit < 5.0f && drawSpacing < 100000.0f)
+        drawSpacing *= 2.0f;
+    while (drawSpacing * pixelsPerUnit > 120.0f && drawSpacing > spacing)
+        drawSpacing *= 0.5f;
+
+    auto toScreen = [&](const Vector3& point) -> ImVec2
+    {
+        const Vector2 normalized = camera->WorldToScreenPoint(point);
+        return ImVec2{areaMin.x_ + normalized.x_ * areaSize.x_, areaMin.y_ + normalized.y_ * areaSize.y_};
+    };
+
+    const float firstX = std::floor(left / drawSpacing) * drawSpacing;
+    const float firstY = std::floor(bottom / drawSpacing) * drawSpacing;
+    ImDrawList* drawList = ui::GetWindowDrawList();
+    unsigned lineCount = 0;
+    for (float x = firstX; x <= right && lineCount < 2000; x += drawSpacing, ++lineCount)
+    {
+        const long long index = static_cast<long long>(std::llround(x / drawSpacing));
+        const ImU32 color = index == 0 ? IM_COL32(95, 145, 205, 180)
+            : (index % 5 == 0 ? IM_COL32(75, 95, 120, 120) : IM_COL32(55, 68, 85, 90));
+        drawList->AddLine(toScreen(Vector3{x, bottom, 0.0f}), toScreen(Vector3{x, top, 0.0f}), color,
+            index == 0 ? 1.5f : 1.0f);
+    }
+
+    lineCount = 0;
+    for (float y = firstY; y <= top && lineCount < 2000; y += drawSpacing, ++lineCount)
+    {
+        const long long index = static_cast<long long>(std::llround(y / drawSpacing));
+        const ImU32 color = index == 0 ? IM_COL32(95, 145, 205, 180)
+            : (index % 5 == 0 ? IM_COL32(75, 95, 120, 120) : IM_COL32(55, 68, 85, 90));
+        drawList->AddLine(toScreen(Vector3{left, y, 0.0f}), toScreen(Vector3{right, y, 0.0f}), color,
+            index == 0 ? 1.5f : 1.0f);
+    }
+}
+
 void SceneViewTab::RenderToolbar()
 {
     SceneViewPage* activePage = GetActivePage();
@@ -981,6 +1073,20 @@ void SceneViewTab::RenderToolbar()
         }
         ui::SameLine();
         ui::TextDisabled("%s", scene2DMode_ ? "2D XY orthographic" : "3D perspective");
+
+        if (scene2DMode_)
+        {
+            ui::SameLine();
+            ui::Checkbox("Grid##Scene2D", &activePage->scene2DGridEnabled_);
+            ui::SameLine();
+            ui::Checkbox("Snap##Scene2D", &activePage->scene2DSnapEnabled_);
+            ui::SameLine();
+            ui::SetNextItemWidth(78.0f);
+            ui::DragFloat("Grid size##Scene2D", &activePage->scene2DGridSpacing_, 0.1f, 0.1f, 1000.0f, "%.1f");
+            ui::SameLine();
+            ui::SetNextItemWidth(78.0f);
+            ui::DragFloat("Snap size##Scene2D", &activePage->scene2DSnapSpacing_, 0.1f, 0.1f, 1000.0f, "%.1f");
+        }
     }
 
     Widgets::ToolbarSeparator();
@@ -1012,7 +1118,11 @@ void SceneViewTab::ReadIniSettings(const char* line)
     if (const auto value = ReadIntFromIni(line, "MultiViewport"))
         multiViewportEnabled_ = *value != 0;
     if (const auto value = ReadIntFromIni(line, "Scene2D"))
+    {
         scene2DMode_ = *value != 0;
+        if (SceneViewPage* activePage = GetActivePage())
+            Configure2DView(*activePage, scene2DMode_);
+    }
     for (SceneViewAddon* addon : addons_)
         addon->ReadIniSettings(line);
 }
@@ -1108,7 +1218,11 @@ void SceneViewTab::OnActiveResourceChanged(const ea::string& oldResourceName, co
         data->renderer_->SetActive(name == newResourceName);
 
     if (SceneViewPage* newActivePage = GetPage(newResourceName))
+    {
         InspectSelection(*newActivePage);
+        if (scene2DMode_)
+            Configure2DView(*newActivePage, true);
+    }
 }
 
 void SceneViewTab::OnResourceSaved(const ea::string& resourceName)
@@ -1231,9 +1345,6 @@ void SceneViewTab::RenderContent()
     for (SceneViewPane& pane : activePage->multiViewports_)
         pane.renderer_->SetActive(false);
 
-    if (scene2DMode_)
-        Configure2DView(*activePage, true);
-
     const IntVector2 contentSize = GetContentSize();
     if (contentSize.x_ == 0 || contentSize.y_ == 0)
         return;
@@ -1251,6 +1362,7 @@ void SceneViewTab::RenderContent()
     const auto contentAreaMin = ToVector2(ui::GetItemRectMin());
     const auto contentAreaMax = ToVector2(ui::GetItemRectMax());
     activePage->contentArea_ = Rect{contentAreaMin, contentAreaMax};
+    RenderScene2DGrid(*activePage);
 
     UpdateCameraRay();
     UpdateAddons(*activePage);

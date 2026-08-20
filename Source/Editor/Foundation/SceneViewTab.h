@@ -86,6 +86,7 @@ public:
     explicit SceneViewPage(SceneResource* resource);
     ~SceneViewPage() override;
 
+    void SerializeInBlock(Archive& archive) override;
     ea::any& GetAddonData(const SceneViewAddon& addon);
 
 public:
@@ -103,6 +104,12 @@ public:
 
     bool ignoreNextReload_{};
     ea::optional<PackedSceneSelection> loadingSelection_;
+
+    /// Persisted 2D authoring profile shared by the scene viewport and transform gizmo.
+    bool scene2DGridEnabled_{true};
+    bool scene2DSnapEnabled_{};
+    float scene2DGridSpacing_{1.0f};
+    float scene2DSnapSpacing_{1.0f};
 
     SharedPtr<SimulateSceneAction> currentSimulationAction_;
 
@@ -288,6 +295,7 @@ public:
     void SetMultiViewportEnabled(bool enabled) { multiViewportEnabled_ = enabled; }
     bool IsMultiViewportEnabled() const { return multiViewportEnabled_; }
     unsigned GetActiveViewportIndex() const { return activeViewportIndex_; }
+    bool IsScene2DMode() const { return scene2DMode_; }
 
     /// Return current state.
     /// @{
@@ -322,6 +330,7 @@ private:
     void UpdateAddons(SceneViewPage& page);
     void UpdateCameraRay(SceneRendererToTexture* renderer = nullptr);
     void RenderMultiViewport(SceneViewPage& page);
+    void RenderScene2DGrid(const SceneViewPage& page) const;
     void Configure2DView(SceneViewPage& page, bool enabled);
     bool UpdateDropToScene();
     void InspectSelection(SceneViewPage& page);

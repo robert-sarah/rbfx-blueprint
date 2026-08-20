@@ -110,8 +110,12 @@ void TransformManipulator::ProcessInput(SceneViewPage& scenePage, bool& mouseCon
         Camera* camera = scenePage.renderer_->GetCamera();
         const TransformGizmo gizmo{camera, scenePage.contentArea_};
 
-        const bool needSnap = ui::IsKeyDown(KEY_CTRL);
-        const Vector3 snapValue = needSnap ? cfg.GetSnapValue(operation_) : Vector3::ZERO;
+        const bool forceSnap = ui::IsKeyDown(KEY_CTRL);
+        const bool scene2DSnap = owner_->IsScene2DMode() && scenePage.scene2DSnapEnabled_ && operation_ == TransformGizmoOperation::Translate;
+        const bool needSnap = forceSnap || scene2DSnap;
+        const Vector3 snapValue = scene2DSnap
+            ? Vector3{Clamp(scenePage.scene2DSnapSpacing_, 0.1f, 1000.0f), Clamp(scenePage.scene2DSnapSpacing_, 0.1f, 1000.0f), 0.0f}
+            : (needSnap ? cfg.GetSnapValue(operation_) : Vector3::ZERO);
         if (transformNodesGizmo_->Manipulate(gizmo, operation_, GetCurrentAxes(), isLocal_, isPivoted_, snapValue))
             mouseConsumed = true;
     }
@@ -120,6 +124,13 @@ void TransformManipulator::ProcessInput(SceneViewPage& scenePage, bool& mouseCon
 TransformGizmoAxes TransformManipulator::GetCurrentAxes() const
 {
     static const auto xyz = TransformGizmoAxis::X | TransformGizmoAxis::Y | TransformGizmoAxis::Z;
+    if (owner_->IsScene2DMode())
+    {
+        if (operation_ == TransformGizmoOperation::Rotate)
+            return TransformGizmoAxis::Z;
+        return TransformGizmoAxis::X | TransformGizmoAxis::Y;
+    }
+
     if (operation_ == TransformGizmoOperation::Rotate && settings_->GetValues().screenRotation_)
         return xyz | TransformGizmoAxis::Screen;
     else
