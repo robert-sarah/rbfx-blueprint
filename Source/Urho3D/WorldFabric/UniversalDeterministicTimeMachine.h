@@ -7,6 +7,7 @@
 
 #include <Urho3D/Urho3D.h>
 #include <Urho3D/Core/Variant.h>
+#include <Urho3D/Resource/JSONValue.h>
 
 #include <functional>
 #include <string>
@@ -92,6 +93,16 @@ public:
 
     unsigned long long ComputeDigest() const;
     unsigned long long ComputeBranchDigest(const std::string& branch) const;
+
+    /// Serialize all retained branches, frames, inputs and the current cursor to JSON.
+    JSONValue ToJSON() const;
+    /// Restore a complete replay atomically after validating frame order and state digests.
+    bool FromJSON(const JSONValue& value, std::string* error = nullptr);
+    /// Serialize the replay to UTF-8 JSON text.
+    std::string ExportReplay() const;
+    /// Parse and restore a UTF-8 JSON replay.
+    bool ImportReplay(const std::string& json, std::string* error = nullptr);
+
     void Clear();
 
 private:

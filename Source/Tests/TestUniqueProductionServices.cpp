@@ -77,6 +77,84 @@ TEST_CASE("Universal deterministic time machine branches and finds divergence", 
     CHECK(machine.ComputeDigest() != 0);
 }
 
+TEST_CASE("Universal deterministic time machine exports and imports branch replays", "[worldfabric][determinism][replay]")
+{
+    UniversalDeterministicTimeMachine machine(16);
+    StringVariantMap initial;
+    initial["score"] = Variant(0);
+    REQUIRE(machine.Start(initial));
+
+    const UniversalDeterministicStep step = [](unsigned, float, const StringVariantMap& input,
+        const StringVariantMap& current, StringVariantMap& next)
+    {
+        next = current;
+        next["score"] = current.at("score").GetInt() + input.at("delta").GetInt();
+        return true;
+    };
+
+    StringVariantMap input;
+    input["delta"] = Variant(1);
+    REQUIRE(machine.Advance(input, step));
+    REQUIRE(machine.CreateBranch("alternative", 1));
+    input["delta"] = Variant(5);
+    REQUIRE(machine.Advance(input, step, DeterministicTimeMachineDomain::Gameplay, "alternative step"));
+
+    const std::string replay = machine.ExportReplay();
+    REQUIRE_FALSE(replay.empty());
+
+    UniversalDeterministicTimeMachine restored;
+    std::string error;
+    REQUIRE(restored.ImportReplay(replay, &error));
+    CHECK(error.empty());
+    CHECK(restored.GetCurrentBranch() == "alternative");
+    CHECK(restored.GetCurrentFrame() == 2);
+    CHECK(restored.GetBranches() == machine.GetBranches());
+    CHECK(restored.ComputeDigest() == machine.ComputeDigest());
+    CHECK(restored.ExportReplay() == replay);
+
+    unsigned divergenceFrame = 0;
+    DeterministicFrameDifference difference;
+    REQUIRE(restored.FindFirstDivergence("main", "alternative", divergenceFrame, difference));
+    CHECK(divergenceFrame == 2);
+    CHECK(difference.valid);
+    CHECK(difference.fromDigest != difference.toDigest);
+}
+
+TEST_CASE("Universal deterministic time machine rejects tampered replay atomically", "[worldfabric][determinism][replay]")
+{
+    UniversalDeterministicTimeMachine machine(8);
+    StringVariantMap initial;
+    initial["value"] = Variant(10);
+    REQUIRE(machine.Start(initial));
+
+    const UniversalDeterministicStep step = [](unsigned, float, const StringVariantMap& input,
+        const StringVariantMap& current, StringVariantMap& next)
+    {
+        next = current;
+        next["value"] = current.at("value").GetInt() + input.at("delta").GetInt();
+        return true;
+    };
+
+    StringVariantMap input;
+    input["delta"] = Variant(2);
+    REQUIRE(machine.Advance(input, step));
+    const unsigned originalFrame = machine.GetCurrentFrame();
+    const unsigned long long originalDigest = machine.ComputeDigest();
+
+    JSONValue tampered = machine.ToJSON();
+    tampered["branches"][0]["frames"][0].Set("digest", "1");
+
+    UniversalDeterministicTimeMachine restored;
+    std::string error;
+    CHECK_FALSE(restored.FromJSON(tampered, &error));
+    CHECK_FALSE(error.empty());
+
+    REQUIRE(restored.Start(initial));
+    CHECK(restored.GetCurrentFrame() == 0);
+    CHECK(restored.ComputeDigest() != originalDigest);
+    CHECK(machine.GetCurrentFrame() == originalFrame);
+}
+
 TEST_CASE("Semantic build capsule validates serializes and diffs production evidence", "[worldfabric][capsule]")
 {
     SemanticBuildCapsule capsule;

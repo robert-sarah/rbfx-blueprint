@@ -5,8 +5,13 @@
 
 #include "UniversalDeterministicTimeMachine.h"
 
+#include <Urho3D/Resource/JSONFile.h>
+
 #include <algorithm>
+#include <cerrno>
 #include <cstdint>
+#include <cstdlib>
+#include <limits>
 #include <utility>
 
 namespace Urho3D
@@ -35,6 +40,31 @@ void HashString(std::uint64_t& hash, const ea::string& value)
     HashValue(hash, static_cast<std::uint64_t>(value.size()));
     for (unsigned char byte : value)
         HashByte(hash, byte);
+}
+
+std::string UInt64ToString(std::uint64_t value)
+{
+    return std::to_string(value);
+}
+
+bool ParseUInt64(const JSONValue& value, std::uint64_t& result)
+{
+    if (!value.IsString() || value.GetString().empty())
+        return false;
+
+    errno = 0;
+    char* end = nullptr;
+    const char* begin = value.GetCString();
+    const unsigned long long parsed = std::strtoull(begin, &end, 10);
+    if (errno == ERANGE || end == begin || *end != '\0')
+        return false;
+    result = static_cast<std::uint64_t>(parsed);
+    return true;
+}
+
+bool IsStrictlyAfter(unsigned frame, unsigned previous)
+{
+    return frame > previous;
 }
 
 } // namespace
@@ -319,6 +349,194 @@ unsigned long long UniversalDeterministicTimeMachine::ComputeBranchDigest(const 
             HashByte(hash, byte);
     }
     return hash;
+}
+
+JSONValue UniversalDeterministicTimeMachine::ToJSON() const
+{
+    JSONValue root(JSON_OBJECT);
+    root.Set("version", 1u);
+    root.Set("fixedDelta", fixedDelta_);
+    root.Set("capacity", capacity_);
+    root.Set("currentFrame", currentFrame_);
+    root.Set("generation", generation_);
+    root.Set("currentBranch", currentBranch_.c_str());
+
+    JSONValue currentState(JSON_OBJECT);
+    currentState.SetStringVariantMap(state_);
+    root.Set("state", ea::move(currentState));
+
+    JSONValue branches(JSON_ARRAY);
+    for (const std::string& branchName : GetBranches())
+    {
+        const Branch& branch = branches_.at(branchName);
+        JSONValue branchValue(JSON_OBJECT);
+        branchValue.Set("name", branchName.c_str());
+
+        JSONValue frames(JSON_ARRAY);
+        for (const DeterministicTimeMachineFrame& frame : branch.frames)
+        {
+            JSONValue frameValue(JSON_OBJECT);
+            frameValue.Set("frame", frame.frame);
+            frameValue.Set("generation", frame.generation);
+            frameValue.Set("domain", static_cast<unsigned>(frame.domain));
+            frameValue.Set("digest", UInt64ToString(frame.digest).c_str());
+            frameValue.Set("label", frame.label.c_str());
+
+            JSONValue frameState(JSON_OBJECT);
+            frameState.SetStringVariantMap(frame.state);
+            frameValue.Set("state", ea::move(frameState));
+
+            JSONValue frameInput(JSON_OBJECT);
+            frameInput.SetStringVariantMap(frame.input);
+            frameValue.Set("input", ea::move(frameInput));
+            frames.Push(ea::move(frameValue));
+        }
+        branchValue.Set("frames", ea::move(frames));
+        branches.Push(ea::move(branchValue));
+    }
+    root.Set("branches", ea::move(branches));
+    return root;
+}
+
+bool UniversalDeterministicTimeMachine::FromJSON(const JSONValue& value, std::string* error)
+{
+    auto fail = [this, error](const std::string& message)
+    {
+        SetError(error, message);
+        return false;
+    };
+
+    if (!value.IsObject())
+        return fail("The deterministic replay root must be a JSON object.");
+    if (!value.Contains("version") || value["version"].GetUInt() != 1)
+        return fail("Unsupported deterministic replay version.");
+    if (!value.Contains("fixedDelta") || !value["fixedDelta"].IsNumber()
+        || value["fixedDelta"].GetFloat() <= 0.0f)
+        return fail("The deterministic replay fixed delta must be positive.");
+    if (!value.Contains("capacity") || value["capacity"].GetUInt() < 2)
+        return fail("The deterministic replay capacity must be at least two frames.");
+    if (!value.Contains("currentBranch") || !value["currentBranch"].IsString()
+        || value["currentBranch"].GetString().empty())
+        return fail("The deterministic replay current branch is missing.");
+    if (!value.Contains("state") || !value["state"].IsObject())
+        return fail("The deterministic replay current state must be an object.");
+    if (!value.Contains("branches") || !value["branches"].IsArray())
+        return fail("The deterministic replay branches must be an array.");
+
+    const unsigned currentFrame = value.Contains("currentFrame") ? value["currentFrame"].GetUInt() : 0;
+    const unsigned generation = value.Contains("generation") ? value["generation"].GetUInt() : 1;
+    const std::string currentBranch = value["currentBranch"].GetString().c_str();
+    const float fixedDelta = value["fixedDelta"].GetFloat();
+    const unsigned capacity = value["capacity"].GetUInt();
+    const StringVariantMap state = value["state"].GetStringVariantMap();
+
+    std::unordered_map<std::string, Branch> parsedBranches;
+    for (const JSONValue& branchValue : value["branches"].GetArray())
+    {
+        if (!branchValue.IsObject() || !branchValue.Contains("name") || !branchValue["name"].IsString()
+            || !branchValue.Contains("frames") || !branchValue["frames"].IsArray())
+            return fail("Each deterministic replay branch requires a name and frames array.");
+
+        const std::string branchName = branchValue["name"].GetString().c_str();
+        if (branchName.empty() || parsedBranches.find(branchName) != parsedBranches.end())
+            return fail("Deterministic replay branch names must be non-empty and unique.");
+
+        Branch branch;
+        unsigned previousFrame = 0;
+        bool hasPreviousFrame = false;
+        for (const JSONValue& frameValue : branchValue["frames"].GetArray())
+        {
+            if (!frameValue.IsObject() || !frameValue.Contains("frame") || !frameValue.Contains("generation")
+                || !frameValue.Contains("domain") || !frameValue.Contains("digest")
+                || !frameValue.Contains("state") || !frameValue.Contains("input")
+                || !frameValue["state"].IsObject() || !frameValue["input"].IsObject())
+                return fail("Each deterministic replay frame is missing required fields.");
+
+            const unsigned frameNumber = frameValue["frame"].GetUInt();
+            if (hasPreviousFrame && !IsStrictlyAfter(frameNumber, previousFrame))
+                return fail("Deterministic replay frames must be strictly ordered.");
+            const unsigned domain = frameValue["domain"].GetUInt();
+            if (domain > static_cast<unsigned>(DeterministicTimeMachineDomain::Custom))
+                return fail("Deterministic replay frame domain is invalid.");
+
+            std::uint64_t digest = 0;
+            if (!ParseUInt64(frameValue["digest"], digest))
+                return fail("Deterministic replay frame digest must be an unsigned decimal string.");
+
+            DeterministicTimeMachineFrame frame;
+            frame.frame = frameNumber;
+            frame.generation = frameValue["generation"].GetUInt();
+            frame.domain = static_cast<DeterministicTimeMachineDomain>(domain);
+            frame.state = frameValue["state"].GetStringVariantMap();
+            frame.input = frameValue["input"].GetStringVariantMap();
+            frame.digest = digest;
+            frame.label = frameValue.Contains("label") && frameValue["label"].IsString()
+                ? frameValue["label"].GetString().c_str() : std::string();
+            if (ComputeStateDigest(frame.state) != frame.digest)
+                return fail("Deterministic replay frame state digest does not match its state.");
+
+            branch.frames.push_back(std::move(frame));
+            previousFrame = frameNumber;
+            hasPreviousFrame = true;
+        }
+
+        if (branch.frames.empty())
+            return fail("Deterministic replay branches cannot be empty.");
+        parsedBranches.emplace(branchName, std::move(branch));
+    }
+
+    if (parsedBranches.empty())
+    {
+        if (currentFrame != 0 || !state.empty())
+            return fail("An empty deterministic replay can only have an empty frame-zero state.");
+    }
+    else
+    {
+        const auto currentBranchIt = parsedBranches.find(currentBranch);
+        if (currentBranchIt == parsedBranches.end())
+            return fail("The deterministic replay current branch does not exist.");
+        const DeterministicTimeMachineFrame* currentSnapshot = FindFrame(currentBranchIt->second, currentFrame);
+        if (!currentSnapshot || ComputeStateDigest(state) != currentSnapshot->digest)
+            return fail("The deterministic replay current state does not match its current frame.");
+    }
+
+    fixedDelta_ = fixedDelta;
+    capacity_ = capacity;
+    currentFrame_ = currentFrame;
+    generation_ = generation;
+    currentBranch_ = currentBranch;
+    state_ = state;
+    branches_ = std::move(parsedBranches);
+    return true;
+}
+
+std::string UniversalDeterministicTimeMachine::ExportReplay() const
+{
+    auto serialize = [this](Context* context)
+    {
+        JSONFile file(context);
+        file.GetRoot() = ToJSON();
+        const ea::string text = file.ToString("  ");
+        return std::string(text.c_str(), text.size());
+    };
+
+    if (Context* context = Context::GetInstance())
+        return serialize(context);
+
+    Context temporaryContext;
+    return serialize(&temporaryContext);
+}
+
+bool UniversalDeterministicTimeMachine::ImportReplay(const std::string& json, std::string* error)
+{
+    JSONValue root;
+    const ea::string source(json.c_str());
+    if (!JSONFile::ParseJSON(source, root, false))
+    {
+        SetError(error, "The deterministic replay is not valid JSON.");
+        return false;
+    }
+    return FromJSON(root, error);
 }
 
 void UniversalDeterministicTimeMachine::Clear()
