@@ -22,6 +22,9 @@
 
 #include "../Foundation/HierarchyBrowserTab.h"
 
+#include "../Core/EditorIcons.h"
+#include "../Core/EditorTheme.h"
+
 namespace Urho3D
 {
 
@@ -56,8 +59,15 @@ void HierarchyBrowserTab::ApplyHotkeys(HotkeyManager* hotkeyManager)
 
 void HierarchyBrowserTab::RenderContent()
 {
-    if (source_)
-        sourceInterface_->RenderContent();
+    EditorTheme::PushPanelColors();
+    if (ui::CollapsingHeader(ICON_FA_SITEMAP " Scene Hierarchy", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        if (source_)
+            sourceInterface_->RenderContent();
+        else
+            ui::TextColored(EditorThemeColors::ToColor(EditorThemeColors::TextMuted), "No hierarchy source connected");
+    }
+    EditorTheme::PopPanelColors();
 }
 
 void HierarchyBrowserTab::RenderContextMenuItems()

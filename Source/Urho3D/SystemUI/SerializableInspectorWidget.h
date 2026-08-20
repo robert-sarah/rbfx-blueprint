@@ -97,6 +97,9 @@ public:
     void RenderContent();
 
     ea::string GetTitle();
+    /// Set the case-insensitive attribute filter rendered by the widget.
+    void SetAttributeFilter(const ea::string& filter) { attributeFilter_ = filter; }
+    const ea::string& GetAttributeFilter() const { return attributeFilter_; }
     const WeakSerializableVector& GetObjects() const { return objects_; }
 
 private:

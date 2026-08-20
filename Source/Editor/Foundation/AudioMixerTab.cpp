@@ -3,6 +3,8 @@
 
 #include "AudioMixerTab.h"
 
+#include "../Core/EditorIcons.h"
+#include "../Core/EditorTheme.h"
 #include "../Project/Project.h"
 
 #include <Urho3D/Core/StringUtils.h>
@@ -180,10 +182,11 @@ void AudioMixerTab::ResetDemoMixer()
 
 void AudioMixerTab::RenderToolbar()
 {
-    if (ui::Button("Reset Template"))
+    EditorTheme::PushToolbarColors();
+    if (ui::Button(EditorIcons::ResetLabel))
         ResetDemoMixer();
     ui::SameLine();
-    if (ui::Button("Validate"))
+    if (ui::Button(EditorIcons::ValidateLabel))
     {
         validationError_.clear();
         if (!GetMixer().GetBus("Master"))
@@ -191,8 +194,9 @@ void AudioMixerTab::RenderToolbar()
         else
             status_ = "Audio mixer is valid";
     }
+    EditorTheme::PopToolbarColors();
     ui::SameLine();
-    ui::Text("%s", status_.c_str());
+    ui::TextColored(EditorThemeColors::ToColor(EditorThemeColors::TextMuted), "%s", status_.c_str());
 }
 
 void AudioMixerTab::RenderBuses(AudioMixer& mixer)
@@ -227,7 +231,8 @@ void AudioMixerTab::RenderBuses(AudioMixer& mixer)
         ui::EndTable();
     }
 
-    if (ui::Button("Add Bus"))
+    EditorTheme::PushToolbarColors(true);
+    if (ui::Button(ICON_FA_DIAGRAM_PROJECT " Add Bus"))
     {
         const JSONValue before = CaptureMixer();
         const ea::string name = MakeUniqueBusName(mixer);
@@ -237,6 +242,7 @@ void AudioMixerTab::RenderBuses(AudioMixer& mixer)
             CommitMixerEdit(before, Format("Added bus {}", name));
         }
     }
+    EditorTheme::PopToolbarColors();
 }
 
 void AudioMixerTab::RenderBusInspector(AudioMixer& mixer)
@@ -264,12 +270,14 @@ void AudioMixerTab::RenderBusInspector(AudioMixer& mixer)
     int effectType = static_cast<int>(newEffectType_);
     ui::Combo("##AudioMixerEffectType", &effectType, effectTypes, IM_ARRAYSIZE(effectTypes));
     newEffectType_ = static_cast<unsigned>(effectType);
-    if (ui::Button("Add Effect"))
+    EditorTheme::PushToolbarColors();
+    if (ui::Button(ICON_FA_WAND_MAGIC_SPARKLES " Add Effect"))
     {
         const JSONValue effectBefore = CaptureMixer();
         if (mixer.AddEffect(bus->name, {static_cast<AudioDspType>(newEffectType_), true, 1.0f, 0.0f, 0.0f}))
             CommitMixerEdit(effectBefore, Format("Added {} effect", GetDspTypeName(static_cast<AudioDspType>(newEffectType_))));
     }
+    EditorTheme::PopToolbarColors();
     for (unsigned index = 0; index < bus->effects.size(); ++index)
     {
         const AudioDspEffect& effect = bus->effects[index];
@@ -307,7 +315,8 @@ void AudioMixerTab::RenderVoices(const AudioMixer& mixer)
         ui::EndTable();
     }
 
-    if (ui::Button("Add Preview Voice"))
+    EditorTheme::PushToolbarColors(true);
+    if (ui::Button(ICON_FA_VOLUME_HIGH " Add Preview Voice"))
     {
         AudioMixer& mutableMixer = const_cast<AudioMixer&>(mixer);
         const JSONValue before = CaptureMixer();
@@ -319,6 +328,7 @@ void AudioMixerTab::RenderVoices(const AudioMixer& mixer)
         }
     }
 
+    EditorTheme::PopToolbarColors();
     if (AudioVoice* voice = const_cast<AudioMixer&>(mixer).GetVoice(selectedVoice_))
     {
         const JSONValue before = CaptureMixer();
@@ -360,7 +370,11 @@ void AudioMixerTab::RenderContent()
     }
     RenderMeters(mixer);
     if (!validationError_.empty())
-        ui::TextColored(ImVec4(1.0f, 0.35f, 0.25f, 1.0f), "Error: %s", validationError_.c_str());
+    {
+        EditorTheme::PushDiagnosticText(true);
+        ui::Text("Error: %s", validationError_.c_str());
+        EditorTheme::PopDiagnosticText();
+    }
 }
 
 void AudioMixerTab::RenderContextMenuItems()

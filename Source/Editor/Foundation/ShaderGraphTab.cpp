@@ -3,6 +3,8 @@
 
 #include "ShaderGraphTab.h"
 
+#include "../Core/EditorIcons.h"
+#include "../Core/EditorTheme.h"
 #include "../Project/Project.h"
 
 #include <Urho3D/Resource/ResourceCache.h>
@@ -203,19 +205,21 @@ void ShaderGraphTab::GenerateShader(ShaderGraphLanguage language)
 
 void ShaderGraphTab::RenderToolbar()
 {
-    if (ui::Button("Validate"))
+    EditorTheme::PushToolbarColors();
+    if (ui::Button(ICON_FA_CIRCLE_CHECK " Validate"))
         ValidateGraph();
     ui::SameLine();
-    if (ui::Button("Generate GLSL"))
+    if (ui::Button(ICON_FA_CODE " Generate GLSL"))
         GenerateShader(ShaderGraphLanguage::GLSL);
     ui::SameLine();
-    if (ui::Button("Generate HLSL"))
+    if (ui::Button(ICON_FA_CODE " Generate HLSL"))
         GenerateShader(ShaderGraphLanguage::HLSL);
     ui::SameLine();
-    if (ui::Button("Reset Template"))
+    if (ui::Button(EditorIcons::ResetLabel))
         ResetDemoGraph();
+    EditorTheme::PopToolbarColors();
     ui::SameLine();
-    ui::Text("%s", status_.c_str());
+    ui::TextColored(EditorThemeColors::ToColor(EditorThemeColors::TextMuted), "%s", status_.c_str());
 }
 
 void ShaderGraphTab::RenderNodeList(ShaderGraph& graph)
@@ -254,7 +258,8 @@ void ShaderGraphTab::RenderNodeList(ShaderGraph& graph)
     ui::SetNextItemWidth(-1.0f);
     if (ui::Combo("##ShaderGraphValueType", &valueType, valueTypes, IM_ARRAYSIZE(valueTypes)))
         newNodeType_ = static_cast<unsigned>(valueType);
-    if (ui::Button("Add Node", ImVec2(-1.0f, 0.0f)))
+    EditorTheme::PushToolbarColors(true);
+    if (ui::Button(EditorIcons::AddLabel, ImVec2(-1.0f, 0.0f)))
     {
         const JSONValue before = CaptureGraph();
         const ShaderGraphNodeKind kind = static_cast<ShaderGraphNodeKind>(newNodeKind_);
@@ -265,6 +270,7 @@ void ShaderGraphTab::RenderNodeList(ShaderGraph& graph)
         selectedNodeId_ = id;
         CommitGraphEdit(before, "Added shader graph node");
     }
+    EditorTheme::PopToolbarColors();
 }
 
 void ShaderGraphTab::RenderNodeInspector(ShaderGraph& graph)
@@ -285,7 +291,8 @@ void ShaderGraphTab::RenderNodeInspector(ShaderGraph& graph)
     if (before != CaptureGraph())
         CommitGraphEdit(before, "Renamed shader graph node");
 
-    if (ui::Button("Remove Selected Node"))
+    EditorTheme::PushToolbarColors();
+    if (ui::Button(EditorIcons::RemoveLabel))
     {
         const JSONValue removeBefore = CaptureGraph();
         const unsigned removedId = node->id;
@@ -296,12 +303,13 @@ void ShaderGraphTab::RenderNodeInspector(ShaderGraph& graph)
         }
     }
 
-    if (ui::Button("Add Tint Parameter"))
+    if (ui::Button(ICON_FA_PALETTE " Add Tint Parameter"))
     {
         const JSONValue parameterBefore = CaptureGraph();
         if (graph.SetParameter({"Tint", ShaderGraphValueType::Color, Variant(Color::WHITE)}))
             CommitGraphEdit(parameterBefore, "Added Tint parameter");
     }
+    EditorTheme::PopToolbarColors();
 }
 
 void ShaderGraphTab::RenderConnections(const ShaderGraph& graph)
@@ -368,7 +376,9 @@ void ShaderGraphTab::RenderContent()
 
     if (!validationError_.empty())
     {
-        ui::TextColored(ImVec4(1.0f, 0.35f, 0.25f, 1.0f), "Error: %s", validationError_.c_str());
+        EditorTheme::PushDiagnosticText(true);
+        ui::Text("Error: %s", validationError_.c_str());
+        EditorTheme::PopDiagnosticText();
     }
     RenderGeneratedSource();
 }

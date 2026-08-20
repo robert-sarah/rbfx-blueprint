@@ -30,7 +30,11 @@ The shared `EditorTheme` semantic layer is now consumed by Blueprint for canvas,
 
 `ResourceBrowserTab` now provides back/forward navigation, breadcrumbs, favorite folders and INI persistence. `Console` now groups consecutive identical messages with repeat counts, maintains severity counters across ring-buffer eviction, and exposes the controls through `ConsoleTab` with persisted settings. The existing workspace, docking and inspector contracts remain the source of truth; no unsupported claim of arbitrary native-window detachment was added.
 
-The editor configuration compiled successfully through `EditorLibrary` and `Tests`. The coherent editor CTest run completed with **418/418 tests passing** in `256.46 seconds`.
+The editor configuration compiled successfully through `EditorLibrary` and `Tests`. The coherent editor CTest run completed with **418/418 tests passing** in `255.52 seconds`.
+
+The visual consistency pass adds `EditorIcons.h` as a central action-label dictionary, extends `EditorTheme` with typography metrics and reusable panel/toolbar helpers, and applies the panel theme at `EditorTab::RenderWindow`. This makes the shared panel palette active for all editor tabs instead of requiring every tab to duplicate style pushes. Shader Graph, VFX Graph, Audio Mixer, Build Dashboard, Sequencer, World Fabric and Multiplayer also use the central toolbar labels and semantic diagnostics directly.
+
+`InspectorTab` now exposes a real global property filter and forwards it to active inspector sources. `SerializableInspectorWidget` and `NodeComponentInspector` relay that filter to the component/property renderer, while active inspector groups are collapsible. `HierarchyBrowserTab` now provides a themed collapsible hierarchy section and retains the provider’s existing search, component visibility and temporary-node controls.
 
 ## Boundaries
 

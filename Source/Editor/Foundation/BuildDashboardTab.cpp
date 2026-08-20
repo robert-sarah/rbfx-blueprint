@@ -2,6 +2,8 @@
 
 #include "BuildDashboardTab.h"
 
+#include "../Core/EditorIcons.h"
+#include "../Core/EditorTheme.h"
 #include "../Project/Project.h"
 
 #include <Urho3D/Core/StringUtils.h>
@@ -245,13 +247,15 @@ void BuildDashboardTab::ValidateGraph()
 
 void BuildDashboardTab::RenderToolbar()
 {
-    if (ui::Button("Reset Template"))
+    EditorTheme::PushToolbarColors();
+    if (ui::Button(EditorIcons::ResetLabel))
         ResetTemplate();
     ui::SameLine();
-    if (ui::Button("Validate Graph"))
+    if (ui::Button(ICON_FA_DIAGRAM_PROJECT " Validate Graph"))
         ValidateGraph();
+    EditorTheme::PopToolbarColors();
     ui::SameLine();
-    ui::TextUnformatted(status_.c_str());
+    ui::TextColored(EditorThemeColors::ToColor(EditorThemeColors::TextMuted), "%s", status_.c_str());
 }
 
 void BuildDashboardTab::RenderTasks(BuildDashboardResource& dashboard)
@@ -289,11 +293,13 @@ void BuildDashboardTab::RenderTasks(BuildDashboardResource& dashboard)
     int taskKind = static_cast<int>(newTaskKind_);
     ui::Combo("New task kind", &taskKind, taskKinds, IM_ARRAYSIZE(taskKinds));
     newTaskKind_ = static_cast<unsigned>(taskKind);
-    if (ui::Button("Add Task"))
+    EditorTheme::PushToolbarColors(true);
+    if (ui::Button(ICON_FA_PLUS " Add Task"))
         AddTask();
     ui::SameLine();
-    if (ui::Button("Remove Selected"))
+    if (ui::Button(EditorIcons::RemoveLabel))
         RemoveSelectedTask();
+    EditorTheme::PopToolbarColors();
 }
 
 void BuildDashboardTab::RenderTaskInspector(BuildDashboardResource& dashboard)
@@ -320,7 +326,8 @@ void BuildDashboardTab::RenderTaskInspector(BuildDashboardResource& dashboard)
     for (const ea::string& dependency : task->dependencies)
         ui::BulletText("%s", dependency.c_str());
     ui::InputText("Dependency key", &dependencyInput_);
-    if (ui::Button("Add Dependency") && !dependencyInput_.empty())
+    EditorTheme::PushToolbarColors();
+    if (ui::Button(ICON_FA_LINK " Add Dependency") && !dependencyInput_.empty())
     {
         const JSONValue dependencyBefore = CaptureDashboard();
         if (dependencyInput_ == task->key || !FindTask(dashboard, dependencyInput_))
@@ -334,6 +341,7 @@ void BuildDashboardTab::RenderTaskInspector(BuildDashboardResource& dashboard)
             CommitDashboardEdit(dependencyBefore, Format("Added dependency to {}", task->key));
         }
     }
+    EditorTheme::PopToolbarColors();
 
     ui::Separator();
     ui::Text("Metadata: %u entries", task->metadata.size());
@@ -348,7 +356,9 @@ void BuildDashboardTab::RenderBuildOrder(const BuildDashboardResource& dashboard
     ui::Text("Deterministic Build Order");
     if (!error.empty())
     {
-        ui::TextColored(ImVec4(1.0f, 0.35f, 0.25f, 1.0f), "%s", error.c_str());
+        EditorTheme::PushDiagnosticText(true);
+        ui::Text("%s", error.c_str());
+        EditorTheme::PopDiagnosticText();
         return;
     }
     for (unsigned index = 0; index < order.size(); ++index)
@@ -377,7 +387,11 @@ void BuildDashboardTab::RenderContent()
     ui::Separator();
     RenderBuildOrder(dashboard);
     if (!validationError_.empty())
-        ui::TextColored(ImVec4(1.0f, 0.35f, 0.25f, 1.0f), "Error: %s", validationError_.c_str());
+    {
+        EditorTheme::PushDiagnosticText(true);
+        ui::Text("Error: %s", validationError_.c_str());
+        EditorTheme::PopDiagnosticText();
+    }
 }
 
 void BuildDashboardTab::RenderContextMenuItems()

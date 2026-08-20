@@ -25,7 +25,10 @@
 #include "../../Project/CreateComponentMenu.h"
 
 #include <Urho3D/Container/TransformedSpan.h>
-#include <Urho3D/Resource/ResourceCache.h>
+#include "../Foundation/InspectorTab.h"
+
+#include "../../Core/EditorIcons.h"
+#include "../../Core/EditorTheme.h"
 
 #include <IconFontCppHeaders/IconsFontAwesome6.h>
 
@@ -301,26 +304,41 @@ void NodeComponentInspector::RemoveComponent(Component* component)
     inspectedTab_->PushAction(builder.Build());
 }
 
+void NodeComponentInspector::SetFilter(const ea::string& filter)
+{
+    inspectorFilter_ = filter;
+    if (componentWidget_)
+        componentWidget_->SetAttributeFilter(inspectorFilter_);
+}
+
 void NodeComponentInspector::RenderContent()
 {
+    EditorTheme::PushPanelColors();
     if (nodeWidget_)
     {
-        nodeWidget_->RenderTitle();
-        ui::Separator();
-        nodeWidget_->RenderContent();
-        ui::Separator();
-        RenderAddComponent();
+        if (ui::CollapsingHeader(ICON_FA_CUBES " Selection", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            nodeWidget_->RenderTitle();
+            ui::Separator();
+        }
+        if (ui::CollapsingHeader(ICON_FA_SLIDERS " Properties", ImGuiTreeNodeFlags_DefaultOpen))
+            nodeWidget_->RenderContent();
+        if (ui::CollapsingHeader(ICON_FA_PUZZLE_PIECE " Components", ImGuiTreeNodeFlags_DefaultOpen))
+            RenderAddComponent();
     }
     else if (componentWidget_)
     {
-        componentWidget_->RenderTitle();
-        ui::Separator();
-        componentWidget_->RenderContent();
+        componentWidget_->SetAttributeFilter(inspectorFilter_);
+        if (ui::CollapsingHeader(ICON_FA_CUBE " Component", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            componentWidget_->RenderTitle();
+            ui::Separator();
+            componentWidget_->RenderContent();
+        }
     }
-    else
-    {
+    else if (ui::CollapsingHeader(ICON_FA_LIST " Component Summary", ImGuiTreeNodeFlags_DefaultOpen))
         RenderComponentSummary();
-    }
+    EditorTheme::PopPanelColors();
 }
 
 void NodeComponentInspector::RenderComponentSummary()
@@ -345,7 +363,8 @@ void NodeComponentInspector::RenderComponentSummary()
 
 void NodeComponentInspector::RenderAddComponent()
 {
-    if (ui::Button(ICON_FA_SQUARE_PLUS " Add Component"))
+    EditorTheme::PushToolbarColors(true);
+    if (ui::Button(EditorIcons::AddComponentLabel))
         ui::OpenPopup("##AddComponent");
     if (ui::BeginPopup("##AddComponent"))
     {
@@ -356,6 +375,7 @@ void NodeComponentInspector::RenderAddComponent()
         }
         ui::EndPopup();
     }
+    EditorTheme::PopToolbarColors();
 }
 
 void NodeComponentInspector::RenderContextMenuItems()

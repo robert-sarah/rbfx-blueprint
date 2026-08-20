@@ -25,6 +25,7 @@
 #include "../Project/EditorTab.h"
 #include "../Project/Project.h"
 #include "../Foundation/Shared/InspectorSource.h"
+#include <EASTL/string.h>
 
 namespace Urho3D
 {
@@ -66,6 +67,7 @@ private:
     WeakPtr<Object> source_;
 
     InspectorSource* sourceInterface_{};
+    ea::string filter_;
 };
 
 template <class T, class ... Args>

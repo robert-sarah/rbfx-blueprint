@@ -52,6 +52,7 @@ public:
     bool IsUndoSupported() override { return true; }
 
     void RenderContent() override;
+    void SetFilter(const ea::string& filter) override;
     void RenderContextMenuItems() override;
     void RenderMenu() override;
     void ApplyHotkeys(HotkeyManager* hotkeyManager) override;
@@ -95,6 +96,7 @@ private:
     SharedPtr<NodeInspectorWidget> nodeWidget_;
     SharedPtr<SerializableInspectorWidget> componentWidget_;
     ea::map<ea::string, unsigned> componentSummary_;
+    ea::string inspectorFilter_;
 
     ChangeAttributeBuffer actionBuffer_;
     ea::unique_ptr<ChangeNodeAttributesActionBuilder> nodeActionBuilder_;

@@ -1,5 +1,7 @@
 #include "MultiplayerTab.h"
 
+#include "../Core/EditorIcons.h"
+#include "../Core/EditorTheme.h"
 #include "../Project/Project.h"
 
 #include <Urho3D/Core/StringUtils.h>
@@ -146,16 +148,18 @@ void MultiplayerTab::ApplyToLiveNetwork()
 
 void MultiplayerTab::RenderToolbar()
 {
-    if (ui::Button("Reset Template"))
+    EditorTheme::PushToolbarColors();
+    if (ui::Button(EditorIcons::ResetLabel))
         ResetTemplate();
     ui::SameLine();
-    if (ui::Button("Validate Profile"))
+    if (ui::Button(EditorIcons::ValidateLabel))
         ValidateProfile();
     ui::SameLine();
-    if (ui::Button("Apply Network Tuning"))
+    if (ui::Button(ICON_FA_NETWORK_WIRED " Apply Network Tuning"))
         ApplyToLiveNetwork();
+    EditorTheme::PopToolbarColors();
     ui::SameLine();
-    ui::TextUnformatted(status_.c_str());
+    ui::TextColored(EditorThemeColors::ToColor(EditorThemeColors::TextMuted), "%s", status_.c_str());
 }
 
 void MultiplayerTab::RenderStartupSettings(MultiplayerProfileResource& profile)
@@ -300,7 +304,11 @@ void MultiplayerTab::RenderLiveDiagnostics()
     if (!debugInfo.empty())
         ui::TextWrapped("%s", debugInfo.c_str());
     if (!liveError_.empty())
-        ui::TextColored(ImVec4(1.0f, 0.35f, 0.25f, 1.0f), "Apply error: %s", liveError_.c_str());
+    {
+        EditorTheme::PushDiagnosticText(true);
+        ui::Text("Apply error: %s", liveError_.c_str());
+        EditorTheme::PopDiagnosticText();
+    }
 }
 
 void MultiplayerTab::RenderContent()
@@ -320,7 +328,11 @@ void MultiplayerTab::RenderContent()
     }
 
     if (!validationError_.empty())
-        ui::TextColored(ImVec4(1.0f, 0.35f, 0.25f, 1.0f), "Validation error: %s", validationError_.c_str());
+    {
+        EditorTheme::PushDiagnosticText(true);
+        ui::Text("Validation error: %s", validationError_.c_str());
+        EditorTheme::PopDiagnosticText();
+    }
 }
 
 void MultiplayerTab::RenderContextMenuItems()

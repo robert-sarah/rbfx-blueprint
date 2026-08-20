@@ -1,5 +1,7 @@
 #include "WorldFabricTab.h"
 
+#include "../Core/EditorIcons.h"
+#include "../Core/EditorTheme.h"
 #include "../Project/Project.h"
 
 #include <Urho3D/Core/StringUtils.h>
@@ -267,16 +269,18 @@ void WorldFabricTab::RemoveSelectedDependency()
 
 void WorldFabricTab::RenderToolbar()
 {
-    if (ui::Button("Reset Template"))
+    EditorTheme::PushToolbarColors();
+    if (ui::Button(EditorIcons::ResetLabel))
         ResetTemplate();
     ui::SameLine();
-    if (ui::Button("Seed rbfx Reflection"))
+    if (ui::Button(ICON_FA_WAND_MAGIC_SPARKLES " Seed rbfx Reflection"))
         SeedReflection();
     ui::SameLine();
-    if (ui::Button("Validate Graph"))
+    if (ui::Button(ICON_FA_DIAGRAM_PROJECT " Validate Graph"))
         ValidateGraph();
+    EditorTheme::PopToolbarColors();
     ui::SameLine();
-    ui::TextUnformatted(status_.c_str());
+    ui::TextColored(EditorThemeColors::ToColor(EditorThemeColors::TextMuted), "%s", status_.c_str());
 }
 
 void WorldFabricTab::RenderNodes(WorldFabricGraphResource& resource)
@@ -315,11 +319,13 @@ void WorldFabricTab::RenderNodes(WorldFabricGraphResource& resource)
     int nodeKind = static_cast<int>(newNodeKind_);
     ui::Combo("New node kind", &nodeKind, nodeKinds, IM_ARRAYSIZE(nodeKinds));
     newNodeKind_ = static_cast<unsigned>(nodeKind);
-    if (ui::Button("Add Node"))
+    EditorTheme::PushToolbarColors(true);
+    if (ui::Button(EditorIcons::AddLabel))
         AddNode();
     ui::SameLine();
-    if (ui::Button("Remove Selected Node"))
+    if (ui::Button(EditorIcons::RemoveLabel))
         RemoveSelectedNode();
+    EditorTheme::PopToolbarColors();
 }
 
 void WorldFabricTab::RenderNodeInspector(WorldFabricGraphResource& resource)

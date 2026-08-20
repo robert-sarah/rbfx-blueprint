@@ -2,6 +2,8 @@
 
 #include "VFXGraphTab.h"
 
+#include "../Core/EditorIcons.h"
+#include "../Core/EditorTheme.h"
 #include "../Project/Project.h"
 
 #include <Urho3D/Core/Timer.h>
@@ -201,22 +203,24 @@ void VFXGraphTab::TogglePreview()
 
 void VFXGraphTab::RenderToolbar()
 {
-    if (ui::Button("Validate"))
+    EditorTheme::PushToolbarColors();
+    if (ui::Button(EditorIcons::ValidateLabel))
         ValidateGraph();
     ui::SameLine();
-    if (ui::Button(GetGraph().IsPlaying() ? "Stop Preview" : "Play Preview"))
+    if (ui::Button(GetGraph().IsPlaying() ? ICON_FA_STOP " Stop Preview" : ICON_FA_PLAY " Play Preview"))
         TogglePreview();
     ui::SameLine();
-    if (ui::Button("Clear Preview"))
+    if (ui::Button(ICON_FA_BROOM " Clear Preview"))
     {
         GetGraph().ClearParticles();
         status_ = "VFX preview particles cleared";
     }
     ui::SameLine();
-    if (ui::Button("Reset Template"))
+    if (ui::Button(EditorIcons::ResetLabel))
         ResetDemoGraph();
+    EditorTheme::PopToolbarColors();
     ui::SameLine();
-    ui::Text("%s", status_.c_str());
+    ui::TextColored(EditorThemeColors::ToColor(EditorThemeColors::TextMuted), "%s", status_.c_str());
 }
 
 void VFXGraphTab::RenderNodeList(VFXGraph& graph)
@@ -254,7 +258,8 @@ void VFXGraphTab::RenderNodeList(VFXGraph& graph)
     ui::SetNextItemWidth(-1.0f);
     if (ui::Combo("##VFXGraphNodeType", &nodeType, nodeTypes, IM_ARRAYSIZE(nodeTypes)))
         newNodeType_ = static_cast<unsigned>(nodeType);
-    if (ui::Button("Add Node", ImVec2(-1.0f, 0.0f)))
+    EditorTheme::PushToolbarColors(true);
+    if (ui::Button(EditorIcons::AddLabel, ImVec2(-1.0f, 0.0f)))
     {
         const JSONValue before = CaptureGraph();
         const VFXNodeType type = static_cast<VFXNodeType>(newNodeType_);
@@ -264,6 +269,7 @@ void VFXGraphTab::RenderNodeList(VFXGraph& graph)
         selectedNodeId_ = id;
         CommitGraphEdit(before, "Added VFX graph node");
     }
+    EditorTheme::PopToolbarColors();
 }
 
 void VFXGraphTab::RenderNodeInspector(VFXGraph& graph)
@@ -287,14 +293,15 @@ void VFXGraphTab::RenderNodeInspector(VFXGraph& graph)
     if (before != CaptureGraph())
         CommitGraphEdit(before, "Edited VFX graph node");
 
-    if (node->type != VFXNodeType::Output && ui::Button("Set Selected as Output"))
+    EditorTheme::PushToolbarColors();
+    if (node->type != VFXNodeType::Output && ui::Button(ICON_FA_BULLSEYE " Set Selected as Output"))
     {
         const JSONValue outputBefore = CaptureGraph();
         if (graph.SetOutputNode(node->id))
             CommitGraphEdit(outputBefore, "Changed VFX graph output");
     }
 
-    if (ui::Button("Remove Selected Node"))
+    if (ui::Button(EditorIcons::RemoveLabel))
     {
         const JSONValue removeBefore = CaptureGraph();
         const unsigned removedId = node->id;
@@ -304,6 +311,7 @@ void VFXGraphTab::RenderNodeInspector(VFXGraph& graph)
             CommitGraphEdit(removeBefore, "Removed VFX graph node");
         }
     }
+    EditorTheme::PopToolbarColors();
 }
 
 void VFXGraphTab::RenderSimulationControls(VFXGraph& graph)
@@ -390,7 +398,11 @@ void VFXGraphTab::RenderContent()
     }
 
     if (!validationError_.empty())
-        ui::TextColored(ImVec4(1.0f, 0.35f, 0.25f, 1.0f), "Error: %s", validationError_.c_str());
+    {
+        EditorTheme::PushDiagnosticText(true);
+        ui::Text("Error: %s", validationError_.c_str());
+        EditorTheme::PopDiagnosticText();
+    }
 }
 
 void VFXGraphTab::RenderContextMenuItems()

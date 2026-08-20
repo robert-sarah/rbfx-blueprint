@@ -23,6 +23,7 @@
 #pragma once
 
 #include <Urho3D/Core/Signal.h>
+#include <EASTL/string.h>
 
 namespace Urho3D
 {
@@ -43,6 +44,8 @@ public:
 
     /// Update and render inspector contents.
     virtual void RenderContent() {}
+    /// Receive the optional inspector-wide property filter.
+    virtual void SetFilter(const ea::string&) {}
     /// Update and render tab context menu.
     virtual void RenderContextMenuItems() {}
     /// Render main menu when the inspector tab is focused.

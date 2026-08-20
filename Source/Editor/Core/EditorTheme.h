@@ -47,4 +47,58 @@ constexpr float BorderWidth = 1.0f;
 constexpr float IconSize = 16.0f;
 constexpr float InspectorRowHeight = 28.0f;
 
+// Stable text hierarchy shared by all editor tabs. These values are deliberately
+// expressed as relative editor metrics rather than per-tab magic numbers.
+constexpr float FontSizeTitle = 18.0f;
+constexpr float FontSizeSection = 15.0f;
+constexpr float FontSizeNode = 14.0f;
+constexpr float FontSizeLabel = 13.0f;
+constexpr float FontSizeCaption = 11.0f;
+constexpr float FontSizeMono = 13.0f;
+
+inline ImVec4 ToColor(ImU32 color)
+{
+    return ImGui::ColorConvertU32ToFloat4(color);
+}
+
 } // namespace Urho3D::EditorThemeColors
+
+namespace Urho3D::EditorTheme
+{
+
+inline void PushPanelColors()
+{
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, EditorThemeColors::ToColor(EditorThemeColors::Panel));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, EditorThemeColors::ToColor(EditorThemeColors::PanelAlt));
+}
+
+inline void PopPanelColors()
+{
+    ImGui::PopStyleColor(2);
+}
+
+inline void PushToolbarColors(bool accent = false)
+{
+    ImGui::PushStyleColor(ImGuiCol_Button, EditorThemeColors::ToColor(
+        accent ? EditorThemeColors::AccentMuted : EditorThemeColors::PanelAlt));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorThemeColors::ToColor(EditorThemeColors::Accent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, EditorThemeColors::ToColor(EditorThemeColors::AccentHighlight));
+}
+
+inline void PopToolbarColors()
+{
+    ImGui::PopStyleColor(3);
+}
+
+inline void PushDiagnosticText(bool error)
+{
+    ImGui::PushStyleColor(ImGuiCol_Text, EditorThemeColors::ToColor(
+        error ? EditorThemeColors::Error : EditorThemeColors::Warning));
+}
+
+inline void PopDiagnosticText()
+{
+    ImGui::PopStyleColor();
+}
+
+} // namespace Urho3D::EditorTheme

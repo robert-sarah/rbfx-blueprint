@@ -21,6 +21,7 @@
 //
 
 #include "../Core/EditorPluginManager.h"
+#include "../Core/EditorTheme.h"
 #include "../Core/IniHelpers.h"
 #include "../Project/EditorTab.h"
 #include "../Project/Project.h"
@@ -141,7 +142,9 @@ void EditorTab::RenderWindow()
         }
     }
 
+    EditorTheme::PushPanelColors();
     RenderContent();
+    EditorTheme::PopPanelColors();
 
     if (noContentPadding)
         ui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});

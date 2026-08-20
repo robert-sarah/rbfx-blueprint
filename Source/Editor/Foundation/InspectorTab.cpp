@@ -22,6 +22,9 @@
 
 #include "../Foundation/InspectorTab.h"
 
+#include "../Core/EditorIcons.h"
+#include "../Core/EditorTheme.h"
+
 #include <IconFontCppHeaders/IconsFontAwesome6.h>
 
 namespace Urho3D
@@ -64,8 +67,26 @@ void InspectorTab::ApplyHotkeys(HotkeyManager* hotkeyManager)
 
 void InspectorTab::RenderContent()
 {
+    EditorTheme::PushPanelColors();
+    ui::TextUnformatted(EditorIcons::Search);
+    ui::SameLine();
+    ui::SetNextItemWidth(-1.0f);
+    if (ui::InputText("##InspectorFilter", &filter_))
+    {
+        if (source_)
+            sourceInterface_->SetFilter(filter_);
+    }
+    ui::Separator();
     if (source_)
+    {
+        sourceInterface_->SetFilter(filter_);
         sourceInterface_->RenderContent();
+    }
+    else
+    {
+        ui::TextColored(EditorThemeColors::ToColor(EditorThemeColors::TextMuted), "No inspectable object selected");
+    }
+    EditorTheme::PopPanelColors();
 }
 
 void InspectorTab::RenderContextMenuItems()

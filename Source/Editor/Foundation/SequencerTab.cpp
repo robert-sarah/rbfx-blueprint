@@ -2,6 +2,8 @@
 
 #include "SequencerTab.h"
 
+#include "../Core/EditorIcons.h"
+#include "../Core/EditorTheme.h"
 #include "../Project/Project.h"
 
 #include <Urho3D/Core/Timer.h>
@@ -210,23 +212,25 @@ void SequencerTab::Seek(float time)
 void SequencerTab::RenderToolbar()
 {
     Sequencer& sequencer = GetSequencer();
-    if (ui::Button("Validate"))
+    EditorTheme::PushToolbarColors();
+    if (ui::Button(EditorIcons::ValidateLabel))
         ValidateSequence();
     ui::SameLine();
-    if (ui::Button(sequencer.IsPlaying() && !sequencer.IsPaused() ? "Pause" : "Play"))
+    if (ui::Button(sequencer.IsPlaying() && !sequencer.IsPaused() ? ICON_FA_PAUSE " Pause" : ICON_FA_PLAY " Play"))
         TogglePlayback();
     ui::SameLine();
-    if (ui::Button("Stop"))
+    if (ui::Button(ICON_FA_STOP " Stop"))
     {
         sequencer.Stop();
         playhead_ = sequencer.GetPosition();
         status_ = "Sequencer stopped";
     }
     ui::SameLine();
-    if (ui::Button("Reset Template"))
+    if (ui::Button(EditorIcons::ResetLabel))
         ResetDemoSequence();
+    EditorTheme::PopToolbarColors();
     ui::SameLine();
-    ui::Text("%s", status_.c_str());
+    ui::TextColored(EditorThemeColors::ToColor(EditorThemeColors::TextMuted), "%s", status_.c_str());
 }
 
 void SequencerTab::RenderTrackList(Sequencer& sequencer)
