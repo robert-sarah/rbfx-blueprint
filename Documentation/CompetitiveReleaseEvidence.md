@@ -67,7 +67,7 @@ The phase 9 cases cover case-insensitive model extensions, empty source data, mi
 | `deb2923` | Add editor production validation scenarios and CMake test integration |
 | `756f09d` | Add deterministic model import profiles and documentation |
 
-All listed commits are published on [`blueprint-foundation`](https://github.com/robert-sarah/rbfx-blueprint/tree/blueprint-foundation).
+All commits through `deb2923` are published on [`blueprint-foundation`](https://github.com/robert-sarah/rbfx-blueprint/tree/blueprint-foundation). The model-profile commits `756f09d` and `a67df22` are committed locally with passing validation and are pending publication because the current GitHub CLI credential has expired; no local changes are lost.
 
 ## Evidence boundaries
 
