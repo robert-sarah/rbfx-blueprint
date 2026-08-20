@@ -24,6 +24,51 @@ void HashString(unsigned long long& hash, const ea::string& value)
     HashByte(hash, 0);
 }
 
+bool HasMetadata(const BuildTask& task, const char* key)
+{
+    const auto it = task.metadata.find(key);
+    return it != task.metadata.end() && !it->second.ToString().empty();
+}
+
+bool ValidateProductionMetadata(const BuildTask& task, ea::string& error)
+{
+    const char* required[3] = {};
+    unsigned requiredCount = 0;
+    switch (task.kind)
+    {
+    case BuildTaskKind::GenerateLOD:
+        required[0] = "sourceAsset";
+        required[1] = "levels";
+        required[2] = "algorithm";
+        requiredCount = 3;
+        break;
+    case BuildTaskKind::CookTexture:
+        required[0] = "sourceAsset";
+        required[1] = "maxSize";
+        required[2] = "compression";
+        requiredCount = 3;
+        break;
+    case BuildTaskKind::WriteProvenance:
+        required[0] = "manifest";
+        required[1] = "toolchain";
+        required[2] = "sourceRevision";
+        requiredCount = 3;
+        break;
+    default:
+        return true;
+    }
+
+    for (unsigned index = 0; index < requiredCount; ++index)
+    {
+        if (!HasMetadata(task, required[index]))
+        {
+            error = Format("Production build task '{}' is missing metadata '{}'.", task.key, required[index]);
+            return false;
+        }
+    }
+    return true;
+}
+
 } // namespace
 
 bool BuildGraph::AddTask(const BuildTask& task, const BuildTaskExecutor& executor)
@@ -31,6 +76,13 @@ bool BuildGraph::AddTask(const BuildTask& task, const BuildTaskExecutor& executo
     if (task.key.empty() || !executor || entries_.find(task.key) != entries_.end())
     {
         lastError_ = "Build task key must be unique and executor must be valid.";
+        return false;
+    }
+
+    ea::string metadataError;
+    if (!ValidateProductionMetadata(task, metadataError))
+    {
+        lastError_ = metadataError;
         return false;
     }
 
@@ -230,10 +282,17 @@ unsigned long long BuildGraph::ComputeDigest() const
         const Entry& entry = entries_.at(key);
         HashString(hash, key);
         HashByte(hash, static_cast<unsigned char>(entry.task.kind));
+        ea::vector<ea::string> metadataKeys;
+        metadataKeys.reserve(entry.task.metadata.size());
         for (const auto& metadata : entry.task.metadata)
+            metadataKeys.push_back(metadata.first);
+        std::sort(metadataKeys.begin(), metadataKeys.end());
+        for (const ea::string& metadataKey : metadataKeys)
         {
-            HashString(hash, metadata.first);
-            HashString(hash, metadata.second.ToString());
+            HashString(hash, metadataKey);
+            const auto metadata = entry.task.metadata.find(metadataKey);
+            if (metadata != entry.task.metadata.end())
+                HashString(hash, metadata->second.ToString());
         }
     }
     return hash;

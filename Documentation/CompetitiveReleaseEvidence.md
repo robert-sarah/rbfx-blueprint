@@ -8,7 +8,7 @@ The following evidence was recorded from the `blueprint-foundation` branch after
 | --- | --- | --- |
 | Linux CMake configuration | Passed | Testing configuration completed with editor and player disabled |
 | `Tests` target compilation | Passed | Catch2 test binary built successfully |
-| Coherent full CTest run after phase 9 | **401/401 passed** | No failed test cases in the fresh Linux build; the phase 9 import validation tests are included |
+| Coherent full CTest run after phase 10 | **403/403 passed** | No failed test cases in the fresh Linux build; the BuildGraph cooking-plan validation tests are included |
 | Rollback diagnostics | Covered | Prediction, authoritative digest comparison, divergence reporting, and resynchronization are exercised |
 | 1v1 competitive demo | Covered | Delayed remote input creates measurable divergence and rollback restores exact convergence |
 | Time-machine replay persistence | Covered | JSON export/import is round-tripped and tampered digests are rejected atomically |
@@ -33,14 +33,14 @@ cmake --build build-tests --target Tests -j2
 ctest --test-dir build-tests --output-on-failure
 ```
 
-The final coherent post-phase-9 CTest report is:
+The final coherent post-phase-10 CTest report is:
 
 ```text
-100% tests passed, 0 tests failed out of 401
-Total Test time (real) = 243.38 sec
+100% tests passed, 0 tests failed out of 403
+Total Test time (real) = 244.43 sec
 ```
 
-The two phase 9 cases cover case-insensitive model extensions, empty source data, missing cooked output paths, mismatched importer profiles, and normalized rule removal. They are included in the 401 registered Catch2 cases.
+The phase 9 cases cover case-insensitive model extensions, empty source data, missing cooked output paths, mismatched importer profiles, and normalized rule removal. The phase 10 cases cover required metadata for LOD, texture and provenance tasks, plus digest stability under metadata insertion-order changes. They are included in the 403 registered Catch2 cases.
 
 ## Published commits
 
@@ -60,12 +60,13 @@ The two phase 9 cases cover case-insensitive model extensions, empty source data
 | `680a9aa` | Shader Graph hardening and HLSL sampler declarations |
 | `871762f` | Correct terrain falloff test assertion and preserve deterministic decay guarantees |
 | `a7c3718` | Record coherent 399-test validation and clarify source-test counting |
+| `ad138b5` | Harden deterministic asset import validation and publish the 401/401 evidence |
 
 All listed commits are published on [`blueprint-foundation`](https://github.com/robert-sarah/rbfx-blueprint/tree/blueprint-foundation).
 
 ## Evidence boundaries
 
-This evidence is strong for the deterministic contracts and testable production services covered by the repository. The 401/401 result comes from one coherent Linux build directory after the phase 9 changes; it is not assembled by mixing objects or shared libraries from different configurations. It is not a substitute for native graphical certification on every supported operating system, a long-duration network soak under the target packet-loss profile, or validation of a specific commercial game's third-party physics, audio, rendering, or platform middleware. Those checks remain release gates for each project that adopts the engine.
+This evidence is strong for the deterministic contracts and testable production services covered by the repository. The 403/403 result comes from one coherent Linux build directory after the phase 10 changes; it is not assembled by mixing objects or shared libraries from different configurations. It is not a substitute for native graphical certification on every supported operating system, a long-duration network soak under the target packet-loss profile, or validation of a specific commercial game's third-party physics, audio, rendering, or platform middleware. Those checks remain release gates for each project that adopts the engine.
 
 ## References
 

@@ -19,7 +19,10 @@ enum class BuildTaskKind
     CompileScript,
     CookVFX,
     BuildPackage,
-    Custom
+    Custom,
+    GenerateLOD,
+    CookTexture,
+    WriteProvenance
 };
 
 struct URHO3D_API BuildTaskResult

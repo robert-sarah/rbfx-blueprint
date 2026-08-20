@@ -195,3 +195,67 @@ TEST_CASE("WorldFabric localization resolves current and fallback locales", "[lo
     REQUIRE(localization.Translate("missing", "Missing") == "Missing");
     REQUIRE(localization.GetLocales().size() == 2);
 }
+
+TEST_CASE("BuildGraph validates production cooking task metadata", "[buildgraph][production][cooking]")
+{
+    const BuildTaskExecutor executor = [](const BuildTask&, const ea::vector<BuildTaskResult>&,
+        BuildTaskResult&, ea::string&) { return true; };
+    BuildGraph graph;
+
+    BuildTask incomplete;
+    incomplete.key = "hero-lod";
+    incomplete.kind = BuildTaskKind::GenerateLOD;
+    incomplete.metadata["sourceAsset"] = Variant(ea::string("models/hero.fbx"));
+    ea::string error;
+    REQUIRE_FALSE(graph.AddTask(incomplete, executor));
+    REQUIRE(graph.GetLastError().find("levels") != ea::string::npos);
+
+    BuildTask lod;
+    lod.key = "hero-lod";
+    lod.kind = BuildTaskKind::GenerateLOD;
+    lod.metadata["sourceAsset"] = Variant(ea::string("models/hero.fbx"));
+    lod.metadata["levels"] = Variant(4);
+    lod.metadata["algorithm"] = Variant(ea::string("screen-space-error"));
+    REQUIRE(graph.AddTask(lod, executor));
+
+    BuildTask texture;
+    texture.key = "hero-texture";
+    texture.kind = BuildTaskKind::CookTexture;
+    texture.metadata["sourceAsset"] = Variant(ea::string("textures/hero.png"));
+    texture.metadata["maxSize"] = Variant(2048);
+    texture.metadata["compression"] = Variant(ea::string("BC7"));
+    REQUIRE(graph.AddTask(texture, executor));
+
+    BuildTask provenance;
+    provenance.key = "provenance";
+    provenance.kind = BuildTaskKind::WriteProvenance;
+    provenance.metadata["manifest"] = Variant(ea::string("Build/provenance.json"));
+    provenance.metadata["toolchain"] = Variant(ea::string("gcc-13-cpp17"));
+    provenance.metadata["sourceRevision"] = Variant(ea::string("abc123"));
+    REQUIRE(graph.AddTask(provenance, executor));
+}
+
+TEST_CASE("BuildGraph production digest is independent of metadata insertion order", "[buildgraph][production][digest]")
+{
+    const BuildTaskExecutor executor = [](const BuildTask&, const ea::vector<BuildTaskResult>&,
+        BuildTaskResult&, ea::string&) { return true; };
+    BuildGraph first;
+    BuildTask firstTask;
+    firstTask.key = "texture";
+    firstTask.kind = BuildTaskKind::CookTexture;
+    firstTask.metadata["sourceAsset"] = Variant(ea::string("textures/hero.png"));
+    firstTask.metadata["maxSize"] = Variant(2048);
+    firstTask.metadata["compression"] = Variant(ea::string("BC7"));
+    REQUIRE(first.AddTask(firstTask, executor));
+
+    BuildGraph second;
+    BuildTask secondTask;
+    secondTask.key = "texture";
+    secondTask.kind = BuildTaskKind::CookTexture;
+    secondTask.metadata["compression"] = Variant(ea::string("BC7"));
+    secondTask.metadata["sourceAsset"] = Variant(ea::string("textures/hero.png"));
+    secondTask.metadata["maxSize"] = Variant(2048);
+    REQUIRE(second.AddTask(secondTask, executor));
+
+    REQUIRE(first.ComputeDigest() == second.ComputeDigest());
+}
