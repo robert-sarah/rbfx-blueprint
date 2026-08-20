@@ -220,3 +220,76 @@ TEST_CASE("Asset importer unregisters normalized extensions", "[assets][producti
     REQUIRE_FALSE(removed.success);
     REQUIRE(removed.error.find("No importer registered") != ea::string::npos);
 }
+
+TEST_CASE("Asset import settings persist an optional model profile", "[assets][models][serialization]")
+{
+    AssetImportSettings source;
+    ModelImportProfile profile;
+    profile.sourceFormat = "FBX";
+    profile.provenance = "ci:hero-character";
+    source.SetModelImportProfile(profile);
+
+    const JSONValue serialized = source.ToJSON();
+    REQUIRE(serialized.Contains("modelProfile"));
+
+    AssetImportSettings restored;
+    ea::string error;
+    REQUIRE(restored.FromJSON(serialized, &error));
+    REQUIRE(error.empty());
+    REQUIRE(restored.HasModelImportProfile());
+    REQUIRE(restored.modelProfile.sourceFormat == "fbx");
+    REQUIRE(restored.modelProfile.provenance == "ci:hero-character");
+    REQUIRE(restored.CalculateHash() == source.CalculateHash());
+
+    restored.modelProfile.unitsPerMeter = 0.01;
+    REQUIRE(restored.CalculateHash() != source.CalculateHash());
+}
+
+TEST_CASE("Asset importer validates model profiles before callbacks and cache lookup", "[assets][models][production]")
+{
+    AssetImporter importer;
+    unsigned callbackCount = 0;
+    importer.RegisterRule({"FBX", "ModelImporter", 5,
+        [&](const ea::string&, const ea::string&, const AssetImportSettings&, const ea::string&,
+            ea::vector<ea::string>&, ea::string&)
+        {
+            ++callbackCount;
+            return true;
+        }});
+
+    AssetImportSettings settings;
+    settings.importer = "ModelImporter";
+    ModelImportProfile profile;
+    profile.sourceFormat = "fbx";
+    profile.provenance = "ci:hero-character";
+    profile.unitsPerMeter = 0.0;
+    settings.SetModelImportProfile(profile);
+
+    const AssetImportResult rejected = importer.Import(
+        "Characters/Hero.FBX", "fbx-source", settings, "Cooked/Hero.model");
+    REQUIRE_FALSE(rejected.success);
+    REQUIRE(rejected.error.find("invalid model import profile") != ea::string::npos);
+    REQUIRE(callbackCount == 0);
+
+    profile.unitsPerMeter = 0.01;
+    settings.SetModelImportProfile(profile);
+    const AssetImportResult first = importer.Import(
+        "Characters/Hero.FBX", "fbx-source", settings, "Cooked/Hero.model");
+    REQUIRE(first.success);
+    REQUIRE_FALSE(first.fromCache);
+    REQUIRE(callbackCount == 1);
+
+    const AssetImportResult cached = importer.Import(
+        "Characters/Hero.FBX", "fbx-source", settings, "Cooked/Hero.model");
+    REQUIRE(cached.success);
+    REQUIRE(cached.fromCache);
+    REQUIRE(callbackCount == 1);
+
+    profile.generateTangents = false;
+    settings.SetModelImportProfile(profile);
+    const AssetImportResult changed = importer.Import(
+        "Characters/Hero.FBX", "fbx-source", settings, "Cooked/Hero.model");
+    REQUIRE(changed.success);
+    REQUIRE_FALSE(changed.fromCache);
+    REQUIRE(callbackCount == 2);
+}

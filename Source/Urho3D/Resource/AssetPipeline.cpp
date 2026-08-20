@@ -107,6 +107,8 @@ JSONValue AssetImportSettings::ToJSON() const
     JSONValue root(JSON_OBJECT);
     root.Set("version", version);
     root.Set("importer", importer);
+    if (hasModelProfile)
+        root.Set("modelProfile", modelProfile.ToJSON());
 
     JSONValue values(JSON_OBJECT);
     ea::vector<ea::string> names;
@@ -138,6 +140,16 @@ bool AssetImportSettings::FromJSON(const JSONValue& value, ea::string* error)
     AssetImportSettings parsed;
     parsed.version = value.Contains("version") ? value["version"].GetUInt() : 1u;
     parsed.importer = value.Contains("importer") ? value["importer"].GetString() : "Generic";
+    if (value.Contains("modelProfile"))
+    {
+        std::string profileError;
+        if (!parsed.modelProfile.FromJSON(value["modelProfile"], &profileError))
+        {
+            SetError(error, Format("Invalid model import profile: {}", profileError.c_str()));
+            return false;
+        }
+        parsed.hasModelProfile = true;
+    }
     if (value.Contains("properties"))
     {
         if (!value["properties"].IsObject())
@@ -184,6 +196,9 @@ unsigned AssetImportSettings::CalculateHash() const
         CombineHash(result, static_cast<unsigned>(value.GetType()));
         CombineHash(result, MakeHash(value.ToString()));
     }
+    CombineHash(result, hasModelProfile ? 1u : 0u);
+    if (hasModelProfile)
+        CombineHash(result, modelProfile.CalculateHash());
     return result;
 }
 
@@ -501,6 +516,15 @@ AssetImportResult AssetImporter::Import(const ea::string& assetId, const ea::str
     {
         result.error = Format("Asset '{}' has no cooked output path.", assetId);
         return result;
+    }
+    if (settings.HasModelImportProfile())
+    {
+        std::string profileError;
+        if (!settings.modelProfile.Validate(&profileError))
+        {
+            result.error = Format("Asset '{}' has an invalid model import profile: {}", assetId, profileError.c_str());
+            return result;
+        }
     }
 
     result.sourceHash = MakeHash(sourceData);

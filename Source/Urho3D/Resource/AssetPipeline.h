@@ -7,6 +7,7 @@
 
 #include "../Core/Variant.h"
 #include "../Resource/JSONValue.h"
+#include "../Resource/ModelImportProfile.h"
 #include "../Resource/Resource.h"
 
 namespace Urho3D
@@ -18,6 +19,19 @@ struct URHO3D_API AssetImportSettings
     unsigned version{1};
     ea::string importer{"Generic"};
     StringVariantMap properties;
+    bool hasModelProfile{};
+    ModelImportProfile modelProfile;
+
+    /// Attach a validated model profile to this import settings record.
+    void SetModelImportProfile(const ModelImportProfile& profile)
+    {
+        modelProfile = profile;
+        hasModelProfile = true;
+    }
+    /// Remove the optional model profile without changing generic properties.
+    void ClearModelImportProfile() { hasModelProfile = false; }
+    /// Return whether this settings record carries model-specific import policy.
+    bool HasModelImportProfile() const { return hasModelProfile; }
 
     JSONValue ToJSON() const;
     bool FromJSON(const JSONValue& value, ea::string* error = nullptr);

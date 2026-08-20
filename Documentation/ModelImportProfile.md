@@ -27,11 +27,13 @@ The JSON representation is canonical with a normalized lower-case source format 
 
 The profile digest participates in the asset import settings hash. A change to units, axes, tangent generation, UV policy, LOD thresholds, or provenance therefore creates a distinct cooked variant instead of silently reusing an incompatible cache entry.
 
+When present, `AssetImportSettings::ToJSON` stores the profile under `modelProfile`, and `FromJSON` restores and validates it before accepting the settings. `AssetImporter::Import` validates the embedded profile before importer callbacks and before cache lookup. This makes invalid model settings fail early and prevents a stale cooked variant from being selected for a different model policy.
+
 ## Validation behavior
 
 Validation is intentionally filesystem- and backend-independent. It rejects unsupported formats, invalid coordinate enum values during JSON restoration, non-finite or out-of-range unit scales, invalid UV counts, unordered or out-of-range LOD thresholds, empty provenance, incomplete JSON schemas, and unknown profile versions.
 
-The contract is tested by `TestModelImportProfile.cpp`, including a round trip through JSON, case normalization for `FBX` and `GLTF`, rejection of unsafe production values, and digest changes when provenance changes.
+The contract is tested by `TestModelImportProfile.cpp` and the AssetPipeline integration cases in `TestAssetPipeline.cpp`, including a round trip through JSON, case normalization for `FBX` and `GLTF`, rejection of unsafe production values, digest changes when provenance changes, callback suppression for invalid embedded profiles, cache hits for unchanged profiles, and cache invalidation when a profile flag changes.
 
 ## Scope and limits
 
