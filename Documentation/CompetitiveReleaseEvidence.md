@@ -8,13 +8,13 @@ The following evidence was recorded from the `blueprint-foundation` branch after
 | --- | --- | --- |
 | Linux CMake configuration | Passed | Testing configuration completed with editor and player disabled |
 | `Tests` target compilation | Passed | Catch2 test binary built successfully |
-| Last clean full CTest run before phase 6 | **393/393 passed** | No failed test cases in the recorded Linux run; the phase 6 source tree now contains 401 cases and needs a fresh coherent rebuild for a new full-suite claim |
+| Coherent full CTest run after phase 6 | **399/399 passed** | No failed test cases in the fresh Linux build; two additional raw `TEST_CASE` occurrences are commented-out legacy Scene tests and are not registered |
 | Rollback diagnostics | Covered | Prediction, authoritative digest comparison, divergence reporting, and resynchronization are exercised |
 | 1v1 competitive demo | Covered | Delayed remote input creates measurable divergence and rollback restores exact convergence |
 | Time-machine replay persistence | Covered | JSON export/import is round-tripped and tampered digests are rejected atomically |
 | RbScript workspace tooling | Covered | Cross-file symbols, definitions, references, and JSON-RPC capabilities are tested |
 | Scene 2D editor units | Passed | `SceneViewTab.cpp` and `TransformManipulator.cpp` compile through targeted EditorLibrary Ninja targets |
-| Phase 5 production units | Passed | Behavior tree, online session, and accessibility units compile and their targeted tests pass; the full suite reached 393/393 |
+| Phase 5 production units | Passed | Behavior tree, online session, and accessibility units compile and their targeted tests pass |
 | Asset cache manifest | Passed | `AssetPipeline` manifest persistence and validation units compile with deterministic ordering and duplicate rejection |
 | Terrain authoring core | Passed | Deterministic falloffs, quantized stamping, digest stability, and invalid settings are covered by targeted compilation and smoke validation |
 | World Fabric terrain panel | Passed | `WorldFabricTab.cpp` compiles with the new authoring state and ImGui controls using the editor include configuration |
@@ -33,13 +33,14 @@ cmake --build build-tests --target Tests -j2
 ctest --test-dir build-tests --output-on-failure
 ```
 
-The final clean CTest report before phase 6 was:
+The final coherent post-phase-6 CTest report is:
 
 ```text
-100% tests passed, 0 tests failed out of 393
+100% tests passed, 0 tests failed out of 399
+Total Test time (real) = 244.66 sec
 ```
 
-The phase 6 source tree contains 401 `TEST_CASE` declarations. The complete post-phase-6 CTest report is deliberately not claimed yet: the fresh validation directory was stopped while rebuilding the complete third-party graph, so the remaining step is to reuse one coherent build directory and run the full `Tests` target followed by CTest.
+A raw source grep reports 401 occurrences of `TEST_CASE`, but two are commented-out legacy Scene tests and therefore do not become Catch2 test cases. The compiled test binary registers 399 cases, which is the number reported by CTest.
 
 ## Published commits
 
@@ -62,7 +63,7 @@ All listed commits are published on [`blueprint-foundation`](https://github.com/
 
 ## Evidence boundaries
 
-This evidence is strong for the deterministic contracts and testable production services covered by the repository. The targeted phase 6 results are separated from the last complete CTest run so that the documentation does not overstate validation. It is not a substitute for native graphical certification on every supported operating system, a long-duration network soak under the target packet-loss profile, or validation of a specific commercial game's third-party physics, audio, rendering, or platform middleware. Those checks remain release gates for each project that adopts the engine.
+This evidence is strong for the deterministic contracts and testable production services covered by the repository. The 399/399 result comes from one coherent Linux build directory after the phase 6 changes; it is not assembled by mixing objects or shared libraries from different configurations. It is not a substitute for native graphical certification on every supported operating system, a long-duration network soak under the target packet-loss profile, or validation of a specific commercial game's third-party physics, audio, rendering, or platform middleware. Those checks remain release gates for each project that adopts the engine.
 
 ## References
 
