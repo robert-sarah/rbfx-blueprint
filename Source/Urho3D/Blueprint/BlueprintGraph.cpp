@@ -1019,36 +1019,57 @@ void BlueprintGraph::AutoLayout(float horizontalSpacing, float verticalSpacing)
     for (unsigned i = 0; i < nodes_.size(); ++i)
         rows[rank[i]].push_back(i);
 
-    // Stable barycentric ordering keeps connected nodes close to their
-    // predecessors and makes the result reproducible across runs.
-    for (unsigned pass = 0; pass < 3; ++pass)
+    // Alternate forward and backward barycentric passes. Forward-only sorting
+    // helps predecessors but can make fan-in/fan-out links cross again in the
+    // opposite direction. The alternating pass is deterministic and gives the
+    // editor a substantially cleaner UE-style left-to-right flow without making
+    // graph serialization depend on pointer or hash-map order.
+    auto sortRowByNeighbours = [&](unsigned level, bool useIncoming)
     {
-        for (unsigned level = 1; level < rows.size(); ++level)
+        if (level >= rows.size())
+            return;
+        auto& row = rows[level];
+        const unsigned neighbourLevel = useIncoming ? level - 1 : level + 1;
+        if ((useIncoming && level == 0) || (!useIncoming && neighbourLevel >= rows.size()))
+            return;
+
+        std::sort(row.begin(), row.end(), [&](unsigned lhs, unsigned rhs)
         {
-            auto& row = rows[level];
-            std::sort(row.begin(), row.end(), [&](unsigned lhs, unsigned rhs)
+            auto average = [&](unsigned nodeIndex)
             {
-                auto average = [&](unsigned nodeIndex)
+                float sum = 0.0f;
+                unsigned count = 0;
+                const auto& neighbours = useIncoming ? incoming[nodeIndex] : outgoing[nodeIndex];
+                for (const unsigned neighbour : neighbours)
                 {
-                    float sum = 0.0f;
-                    unsigned count = 0;
-                    for (const unsigned predecessor : incoming[nodeIndex])
+                    auto iter = std::find(rows[neighbourLevel].begin(), rows[neighbourLevel].end(), neighbour);
+                    if (iter != rows[neighbourLevel].end())
                     {
-                        auto iter = std::find(rows[level - 1].begin(), rows[level - 1].end(), predecessor);
-                        if (iter != rows[level - 1].end())
-                        {
-                            sum += static_cast<float>(iter - rows[level - 1].begin());
-                            ++count;
-                        }
+                        sum += static_cast<float>(iter - rows[neighbourLevel].begin());
+                        ++count;
                     }
-                    return count ? sum / static_cast<float>(count) : static_cast<float>(nodeIndex);
-                };
-                const float lhsAverage = average(lhs);
-                const float rhsAverage = average(rhs);
-                if (std::abs(lhsAverage - rhsAverage) > 0.01f)
-                    return lhsAverage < rhsAverage;
-                return nodes_[lhs].id < nodes_[rhs].id;
-            });
+                }
+                return count ? sum / static_cast<float>(count) : static_cast<float>(nodeIndex);
+            };
+            const float lhsAverage = average(lhs);
+            const float rhsAverage = average(rhs);
+            if (std::abs(lhsAverage - rhsAverage) > 0.01f)
+                return lhsAverage < rhsAverage;
+            return nodes_[lhs].id < nodes_[rhs].id;
+        });
+    };
+
+    for (unsigned pass = 0; pass < 6; ++pass)
+    {
+        if ((pass & 1u) == 0)
+        {
+            for (unsigned level = 1; level < rows.size(); ++level)
+                sortRowByNeighbours(level, true);
+        }
+        else if (rows.size() > 1)
+        {
+            for (int level = static_cast<int>(rows.size()) - 2; level >= 0; --level)
+                sortRowByNeighbours(static_cast<unsigned>(level), false);
         }
     }
 

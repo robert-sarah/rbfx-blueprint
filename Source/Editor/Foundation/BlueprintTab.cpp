@@ -12,6 +12,8 @@
 #include <Urho3D/Resource/JSONFile.h>
 #include <Urho3D/Resource/ResourceCache.h>
 
+#include <cmath>
+
 namespace Urho3D
 {
 
@@ -31,6 +33,66 @@ bool IsOutputPin(BlueprintPinKind kind)
 bool IsExecutionPin(BlueprintPinKind kind)
 {
     return kind == BlueprintPinKind::ExecutionInput || kind == BlueprintPinKind::ExecutionOutput;
+}
+
+void AddRoutePoint(ea::vector<ImVec2>& route, const ImVec2& point)
+{
+    if (route.empty() || std::fabs(route.back().x - point.x) > 0.5f || std::fabs(route.back().y - point.y) > 0.5f)
+        route.push_back(point);
+}
+
+void BuildOrthogonalCableRoute(const ImVec2& start, const ImVec2& end, bool fromOutput, float zoom,
+    float laneOffset, ea::vector<ImVec2>& route)
+{
+    route.clear();
+    const float direction = fromOutput ? 1.0f : -1.0f;
+    const float clearance = Max(34.0f * zoom, 18.0f);
+    const float lane = laneOffset * zoom;
+    const ImVec2 startLane{start.x, start.y + lane};
+    const ImVec2 endLane{end.x, end.y + lane};
+    const bool forward = fromOutput ? end.x >= start.x : end.x <= start.x;
+
+    AddRoutePoint(route, start);
+    if (forward)
+    {
+        const float startX = start.x + direction * clearance;
+        const float endX = end.x - direction * clearance;
+        const float midX = (startX + endX) * 0.5f;
+        AddRoutePoint(route, startLane);
+        AddRoutePoint(route, ImVec2{startX, startLane.y});
+        AddRoutePoint(route, ImVec2{midX, startLane.y});
+        AddRoutePoint(route, ImVec2{midX, endLane.y});
+        AddRoutePoint(route, ImVec2{endX, endLane.y});
+        AddRoutePoint(route, endLane);
+    }
+    else
+    {
+        // Backward links travel around the outside edge instead of through a node body.
+        const float detourX = fromOutput ? Max(start.x, end.x) + 82.0f * zoom
+                                         : Min(start.x, end.x) - 82.0f * zoom;
+        AddRoutePoint(route, startLane);
+        AddRoutePoint(route, ImVec2{detourX, startLane.y});
+        AddRoutePoint(route, ImVec2{detourX, endLane.y});
+        AddRoutePoint(route, endLane);
+    }
+    AddRoutePoint(route, end);
+}
+
+void DrawCableArrow(ImDrawList* drawList, const ea::vector<ImVec2>& route, ImU32 color, float zoom)
+{
+    if (route.size() < 2)
+        return;
+    const ImVec2 tip = route.back();
+    const ImVec2 previous = route[route.size() - 2];
+    ImVec2 direction{tip.x - previous.x, tip.y - previous.y};
+    const float length = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+    if (length < 0.01f)
+        return;
+    direction.x /= length;
+    direction.y /= length;
+    const ImVec2 normal{-direction.y, direction.x};
+    const ImVec2 base = tip - direction * (9.0f * zoom);
+    drawList->AddTriangleFilled(tip, base + normal * (4.5f * zoom), base - normal * (4.5f * zoom), color);
 }
 
 ImU32 PinColor(BlueprintDataType type, bool execution)
@@ -522,6 +584,9 @@ void BlueprintTab::RenderToolbar()
     if (ui::Button("Auto Layout"))
         PerformAutoLayout();
     ui::SameLine();
+    if (ui::Button("Align Selected") && selectedNodes_.size() > 1)
+        AlignSelectedNodes();
+    ui::SameLine();
     if (ui::Button(showMinimap_ ? "Hide Minimap" : "Show Minimap"))
         showMinimap_ = !showMinimap_;
     ui::SameLine();
@@ -671,6 +736,7 @@ void BlueprintTab::RenderGraphCanvas()
         CommitGraphEdit("Blueprint nodes moved");
     }
 
+    RenderNodeGroups(canvasOrigin, drawList);
     if (showComments_)
         RenderComments(canvasOrigin, drawList);
     RenderLinks(canvasOrigin, drawList);
@@ -737,20 +803,18 @@ void BlueprintTab::RenderLinks(const ImVec2& canvasOrigin, ImDrawList* drawList)
 
         const ImVec2 fromPosition = GraphToScreen(from->position, canvasOrigin) + ImVec2{NodeWidth * zoom_, GetPinY(*from, fromPinIndex) * zoom_};
         const ImVec2 toPosition = GraphToScreen(to->position, canvasOrigin) + ImVec2{0, GetPinY(*to, toPinIndex) * zoom_};
-        const float direction = toPosition.x >= fromPosition.x ? 1.0f : -1.0f;
-        const float distance = Max(55.0f * zoom_, Abs(toPosition.x - fromPosition.x) * 0.5f);
-        const float laneOffset = (static_cast<float>(linkIndex % 3) - 1.0f) * 4.0f * zoom_;
-        const ImVec2 controlA = fromPosition + ImVec2{direction * distance, laneOffset};
-        const ImVec2 controlB = toPosition - ImVec2{direction * distance, laneOffset};
+        const float laneOffset = (static_cast<float>(linkIndex % 5) - 2.0f) * 5.0f;
         const ImU32 color = PinColor(from->pins[fromPinIndex].dataType, IsExecutionPin(from->pins[fromPinIndex].kind));
-        drawList->AddBezierCubic(fromPosition, fromPosition + ImVec2{2.0f, 2.0f},
-            toPosition + ImVec2{2.0f, 2.0f}, toPosition, IM_COL32(0, 0, 0, 95), 5.0f * zoom_);
-        drawList->AddBezierCubic(fromPosition, controlA, controlB, toPosition, color, 2.5f * zoom_);
-
-        const ImVec2 arrowBase = toPosition - ImVec2{direction * 7.0f * zoom_, 0.0f};
-        const ImVec2 arrowTip = toPosition;
-        const ImVec2 arrowNormal{0.0f, 4.0f * zoom_};
-        drawList->AddTriangleFilled(arrowTip, arrowBase + arrowNormal, arrowBase - arrowNormal, color);
+        ea::vector<ImVec2> route;
+        BuildOrthogonalCableRoute(fromPosition, toPosition, true, zoom_, laneOffset, route);
+        if (route.size() >= 2)
+        {
+            drawList->AddPolyline(route.data(), static_cast<int>(route.size()), IM_COL32(0, 0, 0, 125),
+                ImDrawFlags_None, Max(6.0f * zoom_, 2.0f));
+            drawList->AddPolyline(route.data(), static_cast<int>(route.size()), color,
+                ImDrawFlags_None, Max(2.5f * zoom_, 1.0f));
+            DrawCableArrow(drawList, route, color, zoom_);
+        }
         ++linkIndex;
     }
 }
@@ -776,10 +840,15 @@ void BlueprintTab::RenderLinkPreview(const ImVec2& canvasOrigin, ImDrawList* dra
     const ImVec2 start = GraphToScreen(node->position, canvasOrigin)
         + ImVec2{linkingFromOutput_ ? NodeWidth * zoom_ : 0.0f, GetPinY(*node, pinIndex) * zoom_};
     const ImVec2 end = io.MousePos;
-    const float distance = Max(40.0f, Abs(end.x - start.x) * 0.5f);
-    const ImVec2 controlA = start + ImVec2{linkingFromOutput_ ? distance : -distance, 0.0f};
-    const ImVec2 controlB = end + ImVec2{linkingFromOutput_ ? -distance : distance, 0.0f};
-    drawList->AddBezierCubic(start, controlA, controlB, end, IM_COL32(245, 205, 80, 220), 2.0f);
+    ea::vector<ImVec2> route;
+    BuildOrthogonalCableRoute(start, end, linkingFromOutput_, zoom_, 0.0f, route);
+    if (route.size() >= 2)
+    {
+        drawList->AddPolyline(route.data(), static_cast<int>(route.size()), IM_COL32(0, 0, 0, 110),
+            ImDrawFlags_None, Max(4.0f * zoom_, 2.0f));
+        drawList->AddPolyline(route.data(), static_cast<int>(route.size()), IM_COL32(245, 205, 80, 220),
+            ImDrawFlags_None, Max(2.0f * zoom_, 1.0f));
+    }
 }
 
 void BlueprintTab::RenderSelectionOverlay(const ImVec2& canvasOrigin, ImDrawList* drawList)
@@ -847,6 +916,71 @@ void BlueprintTab::RenderNodeContextMenu()
         ui::CloseCurrentPopup();
     }
     ui::EndPopup();
+}
+
+void BlueprintTab::RenderNodeGroups(const ImVec2& canvasOrigin, ImDrawList* drawList)
+{
+    struct CategoryBounds
+    {
+        ea::string name;
+        Vector2 minimum{Vector2::ZERO};
+        Vector2 maximum{Vector2::ZERO};
+        bool initialized{};
+    };
+
+    ea::vector<CategoryBounds> groups;
+    for (const BlueprintNode& node : graph_.GetNodes())
+    {
+        const auto separator = node.typeName.find('.');
+        const ea::string category = separator == ea::string::npos ? ea::string("General")
+                                                                    : node.typeName.substr(0, separator);
+        CategoryBounds* bounds = nullptr;
+        for (CategoryBounds& candidate : groups)
+        {
+            if (candidate.name == category)
+            {
+                bounds = &candidate;
+                break;
+            }
+        }
+        if (!bounds)
+        {
+            groups.push_back({});
+            groups.back().name = category;
+            bounds = &groups.back();
+        }
+
+        const Vector2 nodeMinimum = node.position - Vector2{18.0f, 38.0f};
+        const Vector2 nodeMaximum = node.position + Vector2{NodeWidth + 18.0f, GetNodeHeight(node) + 18.0f};
+        if (!bounds->initialized)
+        {
+            bounds->minimum = nodeMinimum;
+            bounds->maximum = nodeMaximum;
+            bounds->initialized = true;
+        }
+        else
+        {
+            bounds->minimum.x_ = Min(bounds->minimum.x_, nodeMinimum.x_);
+            bounds->minimum.y_ = Min(bounds->minimum.y_, nodeMinimum.y_);
+            bounds->maximum.x_ = Max(bounds->maximum.x_, nodeMaximum.x_);
+            bounds->maximum.y_ = Max(bounds->maximum.y_, nodeMaximum.y_);
+        }
+    }
+
+    for (const CategoryBounds& bounds : groups)
+    {
+        if (!bounds.initialized)
+            continue;
+        const ImVec2 topLeft = GraphToScreen(bounds.minimum, canvasOrigin);
+        const ImVec2 bottomRight = GraphToScreen(bounds.maximum, canvasOrigin);
+        const ImU32 fill = bounds.name == "Event" ? IM_COL32(45, 105, 170, 28)
+            : bounds.name == "Flow" ? IM_COL32(50, 150, 110, 24)
+            : bounds.name == "Math" ? IM_COL32(150, 105, 45, 24)
+            : IM_COL32(115, 95, 155, 22);
+        drawList->AddRectFilled(topLeft, bottomRight, fill, 10.0f * zoom_);
+        drawList->AddRect(topLeft, bottomRight, IM_COL32(125, 145, 175, 110), 10.0f * zoom_, 0, Max(1.0f, zoom_));
+        drawList->AddText(topLeft + ImVec2{10.0f, 9.0f} * zoom_, IM_COL32(180, 205, 230, 220), bounds.name.c_str());
+    }
 }
 
 void BlueprintTab::RenderNode(const BlueprintNode& node, const ImVec2& canvasOrigin, ImDrawList* drawList)
@@ -1492,6 +1626,37 @@ void BlueprintTab::PerformAutoLayout()
     graph_.AutoLayout();
     CommitGraphEdit("Automatic node layout applied");
     status_ = "Automatic node layout applied";
+}
+
+void BlueprintTab::AlignSelectedNodes()
+{
+    if (selectedNodes_.size() < 2)
+        return;
+
+    BeginGraphEdit();
+    float averageY = 0.0f;
+    unsigned count = 0;
+    for (const BlueprintId nodeId : selectedNodes_)
+    {
+        if (const BlueprintNode* node = graph_.GetNode(nodeId))
+        {
+            averageY += node->position.y_;
+            ++count;
+        }
+    }
+    if (count == 0)
+    {
+        graphEditSnapshot_.clear();
+        return;
+    }
+    averageY /= static_cast<float>(count);
+    for (const BlueprintId nodeId : selectedNodes_)
+    {
+        if (BlueprintNode* node = graph_.GetNode(nodeId))
+            node->position.y_ = averageY;
+    }
+    CommitGraphEdit("Selected Blueprint nodes aligned");
+    status_ = "Selected nodes aligned on a shared execution lane";
 }
 
 void BlueprintTab::RenderContextMenuItems()

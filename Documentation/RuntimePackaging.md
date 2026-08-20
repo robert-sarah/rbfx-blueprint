@@ -12,17 +12,20 @@ package/
 └── bin/
     ├── Editor.exe
     ├── libUrho3D.dll
+    ├── libstdc++-6.dll       # if imported by the PE binaries
+    ├── libgcc_s_seh-1.dll    # if imported by the PE binaries
+    ├── libwinpthread-1.dll   # if imported by the PE binaries
     ├── CoreData/
     └── EditorData/
 ```
 
 `CoreData` contains renderer resources and engine assets. `EditorData` contains editor fonts and UI definitions. `EditorApplication` configures `EP_RESOURCE_PATHS` as `CoreData;EditorData`, and the runtime resolves these directories from the program directory or a detected parent prefix.
 
-For a package that also launches game projects, include `Player.exe`, `Data/`, and `Autoload/` when those resources are used. Native runtime DLLs must be copied beside the executable on Windows.
+For a package that also launches game projects, include `Player.exe`, `Data/`, and `Autoload/` when those resources are used. Native runtime DLLs must be copied beside the executable on Windows. The helper inspects PE imports and copies the exact MinGW GCC 13 runtime DLLs when they are dynamically imported; this prevents `_ZSt21ios_base_library_initv` entry-point failures caused by an older DLL found elsewhere on the machine.
 
 ## Canonical assembly command
 
-The repository helper assembles a runnable package and fails closed when `CoreData` or `EditorData` is absent:
+The repository helper assembles a runnable package, inspects Windows PE imports, and fails closed when `CoreData`, `EditorData`, or an imported MinGW runtime DLL is absent:
 
 ```bash
 ./script/package_runtime.sh <build-bin-dir> <output-dir>
@@ -41,7 +44,7 @@ RBFX_RESOURCE_ROOT=/path/to/bin \
   ./script/package_runtime.sh /path/to/build/bin dist/rbfx-blueprint-runtime
 ```
 
-The helper copies the runtime binaries and libraries, adds `CoreData`, `EditorData`, `Data`, and `Autoload` when available, creates Windows launch scripts, writes a file inventory, and records SHA-256 hashes. It deliberately refuses to create an editor package when either of the two mandatory editor resource directories is missing.
+The helper copies the runtime binaries and libraries, adds `CoreData`, `EditorData`, `Data`, and `Autoload` when available, inspects PE imports, copies the exact imported MinGW runtime DLLs, creates Windows launch scripts, writes a file inventory, and records SHA-256 hashes. It deliberately refuses to create an editor package when a mandatory resource directory or imported Windows runtime is missing.
 
 ## Diagnosing a black window
 

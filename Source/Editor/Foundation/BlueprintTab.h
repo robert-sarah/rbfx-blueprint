@@ -48,6 +48,7 @@ private:
     void AddNodeFromToolbar(const ea::string& typeName);
     void RenderGraphCanvas();
     void RenderNode(const BlueprintNode& node, const ImVec2& canvasOrigin, ImDrawList* drawList);
+    void RenderNodeGroups(const ImVec2& canvasOrigin, ImDrawList* drawList);
     void RenderLinks(const ImVec2& canvasOrigin, ImDrawList* drawList);
     void RenderDiagnostics();
     void RenderTypePanels();
@@ -64,6 +65,7 @@ private:
     void RenderDebugToolbar();
     void RenderWatchWindow();
     void PerformAutoLayout();
+    void AlignSelectedNodes();
     void SaveGraph();
     void LoadGraph();
     void ExportGraphJson();

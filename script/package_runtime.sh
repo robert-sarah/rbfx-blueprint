@@ -54,6 +54,45 @@ find "$BUILD_BIN_DIR" -maxdepth 1 -type f \
     \( -iname '*.dll' -o -iname '*.so' -o -iname '*.so.*' -o -iname '*.dylib' \) \
     -exec cp -f {} "$OUTPUT_DIR/bin/" \;
 
+# MinGW builds import the C++ runtime dynamically unless the toolchain is configured
+# for static linkage. A package that omits these DLLs may start far enough to create a
+# native window and then fail with a missing _ZSt21ios_base_library_initv entry point
+# when Windows resolves an older system copy. Prefer the exact runtime next to the
+# build, then the explicitly supplied toolchain root, then the host MinGW sysroot.
+find_mingw_runtime() {
+    local name="$1"
+    local candidate
+    local roots=(
+        "$BUILD_BIN_DIR"
+        "${MINGW_RUNTIME_ROOT:-}"
+        "/usr/lib/gcc/x86_64-w64-mingw32/13-posix"
+        "/usr/lib/gcc/x86_64-w64-mingw32/13-win32"
+        "/usr/x86_64-w64-mingw32/lib"
+    )
+    for candidate in "${roots[@]}"; do
+        if [[ -n "$candidate" && -f "$candidate/$name" ]]; then
+            printf '%s\n' "$candidate/$name"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Only require MinGW runtime DLLs when the PE binaries actually import them.
+# This keeps the script valid for static-linked Windows packages and non-Windows builds.
+if [[ -f "$BUILD_BIN_DIR/Editor.exe" || -f "$BUILD_BIN_DIR/libUrho3D.dll" ]]; then
+    for runtime in libstdc++-6.dll libgcc_s_seh-1.dll libwinpthread-1.dll; do
+        if grep -aFq "$runtime" "$BUILD_BIN_DIR/Editor.exe" "$BUILD_BIN_DIR/libUrho3D.dll" 2>/dev/null; then
+            runtime_path=$(find_mingw_runtime "$runtime" || true)
+            if [[ -z "$runtime_path" ]]; then
+                echo "package_runtime: imported MinGW runtime is missing: $runtime" >&2
+                exit 5
+            fi
+            cp -f "$runtime_path" "$OUTPUT_DIR/bin/$runtime"
+        fi
+    done
+fi
+
 # These directories are runtime contracts of EditorApplication and Player.
 for resource in CoreData EditorData Data Autoload; do
     if [[ -d "$RESOURCE_ROOT/$resource" ]]; then
@@ -88,7 +127,9 @@ cat > "$OUTPUT_DIR/README-DISTRIBUTION.md" <<'EOF'
 
 Run `run-editor.bat` on Windows to start the editor. The `bin` directory deliberately contains `CoreData` and `EditorData` beside the executable. They are required for resource mounting, editor fonts, UI definitions, and renderer shaders.
 
-Do not distribute `Editor.exe` or `Player.exe` without these resource directories. A package containing only executables and DLLs can create a native window while rendering no usable editor interface.
+Windows MinGW packages also include every imported runtime DLL (`libstdc++-6.dll`, `libgcc_s_seh-1.dll`, and `libwinpthread-1.dll` when required by the PE binaries). Do not replace these files with older copies from another MinGW installation.
+
+Do not distribute `Editor.exe` or `Player.exe` without these resource directories and imported runtime DLLs. A package containing only executables and DLLs can create a native window while rendering no usable editor interface or can fail before process startup with a missing C++ runtime entry point.
 EOF
 
 # Fail closed: a package without these directories is not runnable for the editor.
@@ -98,6 +139,17 @@ for required in Editor CoreData EditorData; do
         *) [[ -d "$OUTPUT_DIR/bin/$required" ]] ;;
     esac
  done
+
+# Fail closed for PE packages: every imported MinGW runtime must be beside the binary.
+if [[ -f "$OUTPUT_DIR/bin/Editor.exe" || -f "$OUTPUT_DIR/bin/libUrho3D.dll" ]]; then
+    for runtime in libstdc++-6.dll libgcc_s_seh-1.dll libwinpthread-1.dll; do
+        if grep -aFq "$runtime" "$OUTPUT_DIR/bin/Editor.exe" "$OUTPUT_DIR/bin/libUrho3D.dll" 2>/dev/null \
+            && [[ ! -f "$OUTPUT_DIR/bin/$runtime" ]]; then
+            echo "package_runtime: package is incomplete; imported runtime is absent: $runtime" >&2
+            exit 6
+        fi
+    done
+fi
 
 find "$OUTPUT_DIR" -type f -printf '%P\n' | sort > "$OUTPUT_DIR/build-info/FILE-LIST.txt"
 (
