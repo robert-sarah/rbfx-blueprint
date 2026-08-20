@@ -70,6 +70,10 @@ public:
     void Clear();
     /// Return number of cached variants.
     unsigned GetEntryCount() const { return entries_.size(); }
+    /// Serialize the cache manifest in stable key order for reproducible builds.
+    JSONValue ToJSON() const;
+    /// Restore a cache manifest, rejecting malformed or duplicate entries.
+    bool FromJSON(const JSONValue& value, ea::string* error = nullptr);
 
 private:
     ea::string MakeKey(const ea::string& assetId, unsigned sourceHash, unsigned settingsHash) const;

@@ -224,6 +224,87 @@ void AssetCache::Clear()
     entries_.clear();
 }
 
+JSONValue AssetCache::ToJSON() const
+{
+    JSONValue root(JSON_OBJECT);
+    JSONValue entries(JSON_ARRAY);
+    ea::vector<ea::string> keys;
+    keys.reserve(entries_.size());
+    for (const auto& item : entries_)
+        keys.push_back(item.first);
+    ea::sort(keys.begin(), keys.end());
+
+    for (const ea::string& key : keys)
+    {
+        const AssetCacheEntry& entry = entries_.at(key);
+        JSONValue item(JSON_OBJECT);
+        item.Set("assetId", entry.assetId);
+        item.Set("outputPath", entry.outputPath);
+        item.Set("sourceHash", entry.sourceHash);
+        item.Set("settingsHash", entry.settingsHash);
+        JSONValue dependencies(JSON_ARRAY);
+        for (const ea::string& dependency : entry.dependencies)
+            dependencies.Push(dependency);
+        item.Set("dependencies", ea::move(dependencies));
+        entries.Push(ea::move(item));
+    }
+    root.Set("entries", ea::move(entries));
+    return root;
+}
+
+bool AssetCache::FromJSON(const JSONValue& value, ea::string* error)
+{
+    if (!value.IsObject() || !value.Contains("entries") || !value["entries"].IsArray())
+    {
+        SetError(error, "Asset cache manifest must contain an entries array.");
+        return false;
+    }
+
+    ea::unordered_map<ea::string, AssetCacheEntry> parsed;
+    for (const JSONValue& item : value["entries"].GetArray())
+    {
+        if (!item.IsObject() || !item.Contains("assetId") || !item.Contains("outputPath")
+            || !item.Contains("sourceHash") || !item.Contains("settingsHash")
+            || !item.Contains("dependencies") || !item["dependencies"].IsArray())
+        {
+            SetError(error, "Asset cache entry is missing required fields.");
+            return false;
+        }
+
+        AssetCacheEntry entry;
+        entry.assetId = item["assetId"].GetString();
+        entry.outputPath = item["outputPath"].GetString();
+        entry.sourceHash = item["sourceHash"].GetUInt();
+        entry.settingsHash = item["settingsHash"].GetUInt();
+        if (entry.assetId.empty())
+        {
+            SetError(error, "Asset cache entry requires a non-empty asset id.");
+            return false;
+        }
+
+        for (const JSONValue& dependency : item["dependencies"].GetArray())
+        {
+            if (!dependency.IsString() || dependency.GetString().empty())
+            {
+                SetError(error, Format("Asset cache entry '{}' has an invalid dependency.", entry.assetId));
+                return false;
+            }
+            entry.dependencies.push_back(dependency.GetString());
+        }
+
+        const ea::string key = MakeKey(entry.assetId, entry.sourceHash, entry.settingsHash);
+        if (parsed.find(key) != parsed.end())
+        {
+            SetError(error, Format("Asset cache manifest contains duplicate entry '{}'.", key));
+            return false;
+        }
+        parsed.emplace(key, ea::move(entry));
+    }
+
+    entries_ = ea::move(parsed);
+    return true;
+}
+
 bool AssetDependencyGraph::WouldCreateCycle(const ea::string& assetId,
     const ea::vector<ea::string>& dependencies) const
 {

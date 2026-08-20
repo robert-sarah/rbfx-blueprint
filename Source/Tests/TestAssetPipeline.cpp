@@ -87,6 +87,50 @@ TEST_CASE("Asset importer reuses cache and invalidates on settings changes", "[a
     REQUIRE(importer.GetCache().GetEntryCount() == 2);
 }
 
+TEST_CASE("Asset cache manifest round trips in stable order and rejects duplicates", "[assets][cache][serialization]")
+{
+    AssetCache cache;
+    AssetCacheEntry second;
+    second.assetId = "models/hero.mesh";
+    second.outputPath = "Cooked/hero.model";
+    second.sourceHash = 20;
+    second.settingsHash = 2;
+    second.dependencies = {"materials/hero.material"};
+    cache.Store(second);
+
+    AssetCacheEntry first;
+    first.assetId = "materials/hero.material";
+    first.outputPath = "Cooked/hero.material";
+    first.sourceHash = 10;
+    first.settingsHash = 1;
+    cache.Store(first);
+
+    const JSONValue serialized = cache.ToJSON();
+    REQUIRE(serialized["entries"].Size() == 2);
+    REQUIRE(serialized["entries"][0]["assetId"].GetString() == "materials/hero.material");
+    REQUIRE(serialized["entries"][1]["assetId"].GetString() == "models/hero.mesh");
+
+    AssetCache restored;
+    ea::string error;
+    REQUIRE(restored.FromJSON(serialized, &error));
+    REQUIRE(error.empty());
+    REQUIRE(restored.GetEntryCount() == 2);
+    AssetCacheEntry restoredEntry;
+    REQUIRE(restored.Find("models/hero.mesh", 20, 2, restoredEntry));
+    REQUIRE(restoredEntry.outputPath == "Cooked/hero.model");
+    REQUIRE(restoredEntry.dependencies == ea::vector<ea::string>({"materials/hero.material"}));
+
+    JSONValue duplicate = serialized;
+    duplicate["entries"].Push(duplicate["entries"][0]);
+    REQUIRE_FALSE(restored.FromJSON(duplicate, &error));
+    REQUIRE_FALSE(error.empty());
+
+    JSONValue malformed = serialized;
+    malformed["entries"][0]["dependencies"] = JSONValue(JSON_OBJECT);
+    REQUIRE_FALSE(restored.FromJSON(malformed, &error));
+    REQUIRE_FALSE(error.empty());
+}
+
 TEST_CASE("Asset dependency graph propagates dirty state and rejects cycles", "[assets][dependencies]")
 {
     AssetDependencyGraph graph;
