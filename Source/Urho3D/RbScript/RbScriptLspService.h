@@ -35,6 +35,14 @@ struct URHO3D_API RbScriptLspLocation
     RbScriptLspRange range;
 };
 
+struct URHO3D_API RbScriptLspWorkspaceSymbol
+{
+    ea::string name;
+    ea::string kind;
+    ea::string detail;
+    RbScriptLspLocation location;
+};
+
 enum class RbScriptLspCompletionKind
 {
     Keyword,
@@ -94,6 +102,9 @@ public:
     const ea::vector<RbScriptDiagnostic>* GetDiagnostics(const ea::string& uri) const;
     ea::vector<RbScriptLspCompletionItem> Complete(const ea::string& uri, const RbScriptLspPosition& position) const;
     bool GoToDefinition(const ea::string& uri, const RbScriptLspPosition& position, RbScriptLspLocation& location) const;
+    ea::vector<RbScriptLspLocation> FindReferences(const ea::string& uri, const RbScriptLspPosition& position,
+        bool includeDeclaration = true) const;
+    ea::vector<RbScriptLspWorkspaceSymbol> WorkspaceSymbols(const ea::string& query = {}) const;
     ea::vector<RbScriptLspTextEdit> Rename(const ea::string& uri, const RbScriptLspPosition& position, const ea::string& newName,
         ea::string* error = nullptr) const;
     ea::string Hover(const ea::string& uri, const RbScriptLspPosition& position) const;
@@ -120,6 +131,7 @@ private:
     static RbScriptLspPosition JsonPosition(const JSONValue& params);
     static JSONValue ToJson(const RbScriptLspRange& range);
     static JSONValue ToJson(const RbScriptLspLocation& location);
+    static JSONValue ToJson(const RbScriptLspWorkspaceSymbol& symbol);
     static JSONValue ToJson(const RbScriptLspCompletionItem& item);
     static JSONValue ToJson(const RbScriptLspTextEdit& edit);
     static JSONValue ToJson(const RbScriptDiagnostic& diagnostic);

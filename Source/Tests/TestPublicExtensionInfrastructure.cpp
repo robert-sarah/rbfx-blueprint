@@ -190,6 +190,79 @@ TEST_CASE("rbscript LSP indexes documents and serves JSON-RPC tooling", "[rbscri
     CHECK(response.Get("result").Get("capabilities").Get("renameProvider").GetBool());
 }
 
+TEST_CASE("rbscript LSP resolves workspace definitions references and symbols", "[rbscript][lsp][workspace]")
+{
+    RbScriptLspService lsp;
+    const ea::string declarationsUri = "file:///project/Combat.rbscript";
+    const ea::string usageUri = "file:///project/Player.rbscript";
+    const ea::string declarations = "module Combat;\nscript CombatMath : Component {\n    fn apply_damage(amount: int) { }\n}\n";
+    const ea::string usage = "module Combat;\nscript Player : Component {\n    fn tick() { apply_damage(1); }\n}\n";
+    REQUIRE(lsp.OpenDocument(declarationsUri, declarations));
+    REQUIRE(lsp.OpenDocument(usageUri, usage));
+
+    const RbScriptLspPosition usagePosition{2, 16};
+    RbScriptLspLocation definition;
+    REQUIRE(lsp.GoToDefinition(usageUri, usagePosition, definition));
+    CHECK(definition.uri == declarationsUri);
+    CHECK(definition.range.start.line == 2);
+    CHECK(definition.range.start.character == 7);
+
+    const ea::vector<RbScriptLspLocation> allReferences = lsp.FindReferences(usageUri, usagePosition);
+    REQUIRE(allReferences.size() == 2);
+    CHECK(allReferences.front().uri == declarationsUri);
+    CHECK(allReferences.back().uri == usageUri);
+
+    const ea::vector<RbScriptLspLocation> usagesOnly = lsp.FindReferences(usageUri, usagePosition, false);
+    REQUIRE(usagesOnly.size() == 1);
+    CHECK(usagesOnly.front().uri == usageUri);
+
+    const ea::vector<RbScriptLspWorkspaceSymbol> symbols = lsp.WorkspaceSymbols("apply_damage");
+    REQUIRE(symbols.size() == 1);
+    CHECK(symbols.front().name == "apply_damage");
+    CHECK(symbols.front().location.uri == declarationsUri);
+
+    JSONValue initialize(JSON_OBJECT);
+    initialize.Set("jsonrpc", "2.0");
+    initialize.Set("id", 1u);
+    initialize.Set("method", "initialize");
+    JSONValue response;
+    REQUIRE(lsp.HandleJsonRpc(initialize, response));
+    CHECK(response.Get("result").Get("capabilities").Get("referencesProvider").GetBool());
+    CHECK(response.Get("result").Get("capabilities").Get("workspaceSymbolProvider").GetBool());
+
+    JSONValue references(JSON_OBJECT);
+    references.Set("jsonrpc", "2.0");
+    references.Set("id", 2u);
+    references.Set("method", "textDocument/references");
+    JSONValue referencesParams(JSON_OBJECT);
+    JSONValue referenceDocument(JSON_OBJECT);
+    referenceDocument.Set("uri", usageUri);
+    referencesParams.Set("textDocument", ea::move(referenceDocument));
+    JSONValue referencePosition(JSON_OBJECT);
+    referencePosition.Set("line", usagePosition.line);
+    referencePosition.Set("character", usagePosition.character);
+    referencesParams.Set("position", ea::move(referencePosition));
+    JSONValue referenceContext(JSON_OBJECT);
+    referenceContext.Set("includeDeclaration", false);
+    referencesParams.Set("context", ea::move(referenceContext));
+    references.Set("params", ea::move(referencesParams));
+    REQUIRE(lsp.HandleJsonRpc(references, response));
+    REQUIRE(response.Get("result").IsArray());
+    CHECK(response.Get("result").Size() == 1);
+
+    JSONValue workspace(JSON_OBJECT);
+    workspace.Set("jsonrpc", "2.0");
+    workspace.Set("id", 3u);
+    workspace.Set("method", "workspace/symbol");
+    JSONValue workspaceParams(JSON_OBJECT);
+    workspaceParams.Set("query", "apply_damage");
+    workspace.Set("params", ea::move(workspaceParams));
+    REQUIRE(lsp.HandleJsonRpc(workspace, response));
+    REQUIRE(response.Get("result").IsArray());
+    CHECK(response.Get("result").Size() == 1);
+    CHECK(response.Get("result")[0].Get("location").Get("uri").GetString() == declarationsUri);
+}
+
 TEST_CASE("interactive documentation searches and round-trips", "[documentation][rbscript]")
 {
     InteractiveDocumentation documentation;

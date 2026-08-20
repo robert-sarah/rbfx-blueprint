@@ -1,0 +1,29 @@
+module Competitive;
+
+/// Minimal deterministic player controller used by rollback examples.
+script CompetitivePlayer : Node
+{
+    var moveAxis: f32 = 0.0f;
+    var positionX: f32 = 0.0f;
+    var simulationFrame: u32 = 0;
+
+    /// Called by the network adapter for both local and remote input streams.
+    fn record_input(frame: u32, axis: f32) -> void
+    {
+        simulationFrame = frame;
+        moveAxis = axis;
+    }
+
+    /// Fixed-step gameplay update. The same inputs produce the same state.
+    fn simulate_fixed_step(frame: u32, delta: f32) -> void
+    {
+        simulationFrame = frame;
+        positionX = positionX + moveAxis * delta;
+    }
+
+    /// A rollback checkpoint can restore these fields before replaying inputs.
+    fn get_rollback_state() -> String
+    {
+        return "frame=" + simulationFrame + ";positionX=" + positionX + ";axis=" + moveAxis;
+    }
+}

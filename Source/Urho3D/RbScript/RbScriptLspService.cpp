@@ -291,12 +291,119 @@ bool RbScriptLspService::GoToDefinition(const ea::string& uri, const RbScriptLsp
     if (!document)
         return false;
     const RbScriptToken* token = FindTokenAt(*document, position);
-    const RbScriptLspSymbol* symbol = token ? FindSymbol(*document, token->lexeme) : nullptr;
-    if (!symbol)
+    if (!token || token->kind != RbScriptTokenKind::Identifier)
         return false;
-    location.uri = uri;
-    location.range = symbol->range;
-    return true;
+
+    if (const RbScriptLspSymbol* symbol = FindSymbol(*document, token->lexeme))
+    {
+        location.uri = uri;
+        location.range = symbol->range;
+        return true;
+    }
+
+    for (const auto& entry : documents_)
+    {
+        for (const RbScriptLspSymbol& symbol : entry.second.symbols)
+        {
+            if (symbol.name == token->lexeme)
+            {
+                location.uri = entry.first;
+                location.range = symbol.range;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+ea::vector<RbScriptLspLocation> RbScriptLspService::FindReferences(const ea::string& uri,
+    const RbScriptLspPosition& position, bool includeDeclaration) const
+{
+    ea::vector<RbScriptLspLocation> result;
+    const RbScriptLspDocument* document = GetDocument(uri);
+    if (!document)
+        return result;
+    const RbScriptToken* target = FindTokenAt(*document, position);
+    if (!target || target->kind != RbScriptTokenKind::Identifier)
+        return result;
+
+    bool declared = false;
+    for (const auto& entry : documents_)
+    {
+        for (const RbScriptLspSymbol& symbol : entry.second.symbols)
+        {
+            if (symbol.name == target->lexeme)
+            {
+                declared = true;
+                break;
+            }
+        }
+        if (declared)
+            break;
+    }
+    if (!declared)
+        return result;
+
+    for (const auto& entry : documents_)
+    {
+        const RbScriptLspDocument& candidate = entry.second;
+        for (const RbScriptToken& token : candidate.tokens)
+        {
+            if (token.kind != RbScriptTokenKind::Identifier || token.lexeme != target->lexeme)
+                continue;
+
+            bool isDeclaration = false;
+            for (const RbScriptLspSymbol& symbol : candidate.symbols)
+            {
+                const RbScriptLspRange range = ToRange(token.span);
+                if (symbol.name == token.lexeme && symbol.range.start.line == range.start.line
+                    && symbol.range.start.character == range.start.character)
+                {
+                    isDeclaration = true;
+                    break;
+                }
+            }
+            if (!includeDeclaration && isDeclaration)
+                continue;
+            result.push_back({entry.first, ToRange(token.span)});
+        }
+    }
+
+    std::sort(result.begin(), result.end(), [](const RbScriptLspLocation& lhs, const RbScriptLspLocation& rhs)
+    {
+        if (lhs.uri != rhs.uri)
+            return lhs.uri < rhs.uri;
+        if (lhs.range.start.line != rhs.range.start.line)
+            return lhs.range.start.line < rhs.range.start.line;
+        return lhs.range.start.character < rhs.range.start.character;
+    });
+    return result;
+}
+
+ea::vector<RbScriptLspWorkspaceSymbol> RbScriptLspService::WorkspaceSymbols(const ea::string& query) const
+{
+    ea::vector<RbScriptLspWorkspaceSymbol> result;
+    for (const auto& entry : documents_)
+    {
+        for (const RbScriptLspSymbol& symbol : entry.second.symbols)
+        {
+            if (!query.empty() && symbol.name.find(query) == ea::string::npos)
+                continue;
+            result.push_back({symbol.name, symbol.kind, symbol.detail, {entry.first, symbol.range}});
+        }
+    }
+
+    std::sort(result.begin(), result.end(), [](const RbScriptLspWorkspaceSymbol& lhs, const RbScriptLspWorkspaceSymbol& rhs)
+    {
+        if (lhs.name != rhs.name)
+            return lhs.name < rhs.name;
+        if (lhs.location.uri != rhs.location.uri)
+            return lhs.location.uri < rhs.location.uri;
+        if (lhs.location.range.start.line != rhs.location.range.start.line)
+            return lhs.location.range.start.line < rhs.location.range.start.line;
+        return lhs.location.range.start.character < rhs.location.range.start.character;
+    });
+    return result;
 }
 
 ea::vector<RbScriptLspTextEdit> RbScriptLspService::Rename(const ea::string& uri, const RbScriptLspPosition& position,
@@ -371,6 +478,16 @@ JSONValue RbScriptLspService::ToJson(const RbScriptLspLocation& location)
     return result;
 }
 
+JSONValue RbScriptLspService::ToJson(const RbScriptLspWorkspaceSymbol& symbol)
+{
+    JSONValue result(JSON_OBJECT);
+    result.Set("name", symbol.name);
+    result.Set("kind", symbol.kind);
+    result.Set("detail", symbol.detail);
+    result.Set("location", ToJson(symbol.location));
+    return result;
+}
+
 JSONValue RbScriptLspService::ToJson(const RbScriptLspCompletionItem& item)
 {
     JSONValue result(JSON_OBJECT);
@@ -439,6 +556,8 @@ bool RbScriptLspService::HandleJsonRpc(const JSONValue& request, JSONValue& resp
         capabilities.Set("definitionProvider", true);
         capabilities.Set("hoverProvider", true);
         capabilities.Set("renameProvider", true);
+        capabilities.Set("referencesProvider", true);
+        capabilities.Set("workspaceSymbolProvider", true);
         result.Set("capabilities", ea::move(capabilities));
         response.Set("result", ea::move(result));
         return true;
@@ -492,6 +611,27 @@ bool RbScriptLspService::HandleJsonRpc(const JSONValue& request, JSONValue& resp
             return true;
         }
         response.Set("result", ToJson(location));
+        return true;
+    }
+    if (method == "textDocument/references")
+    {
+        bool includeDeclaration = true;
+        const JSONValue& context = params.Get("context");
+        if (context.IsObject() && context.Contains("includeDeclaration"))
+            includeDeclaration = context.Get("includeDeclaration").GetBool(true);
+        JSONValue references(JSON_ARRAY);
+        for (const RbScriptLspLocation& reference : FindReferences(JsonUri(params), JsonPosition(params), includeDeclaration))
+            references.Push(ToJson(reference));
+        response.Set("result", ea::move(references));
+        return true;
+    }
+    if (method == "workspace/symbol")
+    {
+        JSONValue symbols(JSON_ARRAY);
+        const ea::string query = params.IsObject() ? params.Get("query").GetString() : ea::string();
+        for (const RbScriptLspWorkspaceSymbol& symbol : WorkspaceSymbols(query))
+            symbols.Push(ToJson(symbol));
+        response.Set("result", ea::move(symbols));
         return true;
     }
     if (method == "textDocument/hover")
