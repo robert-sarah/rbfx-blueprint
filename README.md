@@ -84,7 +84,7 @@ The P3 layer extends World Fabric beyond the editor and provides contracts for d
 | **HotReloadStateStore** | Runtime field capture/restoration, hot-reload generations, validation, removal, and stable digests |
 | **Native CI** | `blueprint-native-validation` job covering Linux, Windows MSVC x64, and macOS arm64/x64 in GitHub Actions |
 
-Local validation of this delivery was performed on a clean Linux rebuild: **370/370 CTest tests pass**. Coverage includes negative cases for deterministic branches, malformed JSON, duplicates, causal detachment, and canonicalization of fields containing separators. The workflows `blueprint-native-validation` and `production-validation` prepare native Windows and macOS configuration, compilation and test execution. The latter also compiles the Editor on all desktop runners and runs a bounded Linux/Xvfb graphical smoke test; optional native GUI smoke runs are available through manual dispatch.
+Local validation of the earlier production delivery was performed on a clean Linux rebuild: **370/370 CTest tests passed** before the competitive extensions. The competitive branch subsequently added rollback diagnostics, a 1v1 demonstration, JSON replay persistence, workspace-aware LSP coverage, and additional regression cases. The latest clean Linux run records **379/379 CTest tests passing**. Coverage includes negative cases for deterministic branches, malformed JSON, duplicates, causal detachment, and canonicalization of fields containing separators. The workflows `blueprint-native-validation` and `production-validation` prepare native Windows and macOS configuration, compilation and test execution. The latter also compiles the Editor on all desktop runners and runs a bounded Linux/Xvfb graphical smoke test; optional native GUI smoke runs are available through manual dispatch.
 
 ### Unique production extensions
 
@@ -97,6 +97,19 @@ The following three services extend World Fabric beyond a dependency graph and a
 | **Semantic Build Capsule** | Stores a canonical JSON capsule containing environment data, World Fabric/Time Machine digests, semantic inputs, and plugins, with validation, deterministic fingerprints, and build-to-build diffing. |
 
 These services are designed as reusable runtime contracts for the editor, CI, profiler, networking, and support tools. They provide a foundation for traceability and reproduction; they do not by themselves constitute complete production certification or automatic capture of every engine subsystem.
+
+### Competitive multiplayer focus
+
+The project now has a deliberate competitive scope: **deterministic indie/AA multiplayer with rollback**, not breadth parity with Unity, Unreal Engine, or Godot. `DeterministicSimulation`, `RollbackManager`, `UniversalDeterministicTimeMachine`, and the executable `TestCompetitiveDemo` form the primary proof chain from fixed-step state to delayed-input reconciliation, digest diagnostics, JSON replay persistence, and exact 1v1 convergence.
+
+| Competitive pillar | Delivered contract | Evidence and limits |
+| --- | --- | --- |
+| **Rollback netcode** | Ordered bounded prediction, authoritative reconciliation, digest comparison, and transport-independent resynchronization | [`CompetitiveNetcode.md`](Documentation/CompetitiveNetcode.md), network tests, and 1v1 demonstration; the manager does not pretend to be a socket or matchmaking service |
+| **Temporal debugging** | Branches, replay, frame diff, first-divergence search, and validated JSON import/export | [`DeterministicTimeMachine.md`](Documentation/DeterministicTimeMachine.md); game-specific long-term storage remains a project decision |
+| **RbScript and Blueprint** | Workspace-aware LSP, cross-file symbols/references, reflection completion, and bidirectional bridge tests | [`RbScriptLsp.md`](Documentation/RbScriptLsp.md) and [`CompetitivePlayer.rbscript`](Examples/RbScript/CompetitivePlayer.rbscript) |
+| **2D/3D parity** | Shared scene contracts plus an orthographic XY profile, world grid, persistent snapping, and constrained 2D gizmo | [`SceneView2D.md`](Documentation/SceneView2D.md); specialized tilemap and sprite-authoring tools are not implied |
+
+The complete mission statement and conservative release criteria are documented in [`CompetitiveMission.md`](Documentation/CompetitiveMission.md). The branch is intended to be judged by reproducible match evidence, divergence reports, replay agreement, and native platform validation rather than by an unbounded feature checklist.
 
 ### P5 — Open world runtime and multi-viewport authoring
 
@@ -133,7 +146,7 @@ The gameplay production layer adds reusable C++17 runtime contracts for the syst
 
 The separation is enforced at content-registry validation time: a 2D-only profile rejects 3D assets, a 3D-only profile rejects 2D assets, and a hybrid profile accepts both. Standard editor file analysis recognizes `.inventory`, `.equipment`, `.dialogue`, `.skilltree`, `.economy`, `.aiprofile`, `.animationprofile`, `.vfx`, `.ui`, `.gameplay2d`, `.gameplay3d`, and `.gameplayhybrid` as JSON-editable production assets.
 
-The Linux validation for this delivery contains **370/370 CTest tests**, including inventory, equipment, dialogue, skills, economy, advanced AI, 2D/3D animation, VFX, UI, content compatibility and deterministic manifest cases. The latest production contracts are documented in [`Documentation/ProductionFinalization.md`](Documentation/ProductionFinalization.md) and the release gates are documented in [`Documentation/ProductionReadiness.md`](Documentation/ProductionReadiness.md).
+The Linux validation for this delivery contains the production gameplay tests, including inventory, equipment, dialogue, skills, economy, advanced AI, 2D/3D animation, VFX, UI, content compatibility and deterministic manifest cases. Competitive additions are covered by dedicated rollback, replay, LSP, and 1v1 demonstration tests. The latest production contracts are documented in [`Documentation/ProductionFinalization.md`](Documentation/ProductionFinalization.md) and the release gates are documented in [`Documentation/ProductionReadiness.md`](Documentation/ProductionReadiness.md).
 
 ### P6 — Production finalization 0.7.0-production
 
@@ -234,11 +247,11 @@ rbfx-blueprint is distributed under the MIT License. The project is derived from
 
 `ProductionReadiness` adds explicit evidence gates for diagnostics, sanitizer and fuzzing campaigns, long-run soak, native desktop validation, reproducible builds, plugin ABI manifests, dependency and license audits, 2D/3D/hybrid reference projects, documentation coverage and release packaging. These gates make missing evidence visible instead of presenting a contract test as a platform certification. The CI workflow also records reproducible-build provenance and runs Linux ASan/UBSan production contracts.
 
-The recommended 1.0 exit criteria are documented in [`Documentation/ProductionReadiness.md`](Documentation/ProductionReadiness.md). The supported desktop matrix must be confirmed on real Windows, Linux and macOS machines with the target graphics drivers before claiming final platform certification.
+The recommended 1.0 exit criteria are documented in [`Documentation/ProductionReadiness.md`](Documentation/ProductionReadiness.md), while competitive validation evidence is summarized in [`Documentation/CompetitiveReleaseEvidence.md`](Documentation/CompetitiveReleaseEvidence.md). The supported desktop matrix must be confirmed on real Windows, Linux and macOS machines with the target graphics drivers before claiming final platform certification.
 
 ## Maturity status
 
-rbfx-blueprint now has a substantially broader editor and production foundation than a minimal prototype: resources are persisted, interface contracts are tested, World Fabric provides a cross-system semantic layer, and the P3/P4/P5 runtime and editor foundations are present. **370/370 Linux tests pass** in the current validation session, and the Linux Debug Editor target builds successfully. Full industrial-production qualification still requires load testing, reference projects, native Windows/macOS validation, broader user documentation, and long-duration stability campaigns.
+rbfx-blueprint now has a substantially broader editor and production foundation than a minimal prototype: resources are persisted, interface contracts are tested, World Fabric provides a cross-system semantic layer, and the P3/P4/P5 runtime and editor foundations are present. The latest clean Linux validation records **379/379 CTest tests passing**. The modified Scene workspace units also compile successfully through their targeted EditorLibrary Ninja targets. Full industrial-production qualification still requires load testing, reference projects, native Windows/macOS validation, broader user documentation, and long-duration stability campaigns. The recorded competitive evidence is summarized in [`CompetitiveReleaseEvidence.md`](Documentation/CompetitiveReleaseEvidence.md).
 
 ## References
 
