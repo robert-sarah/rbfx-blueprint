@@ -120,10 +120,16 @@ const ShaderGraphNode* ShaderGraph::GetOutputNode() const
 
 bool ShaderGraph::Validate(ea::string* error) const
 {
-    if (outputNodeId_ == 0 || !GetOutputNode() || GetOutputNode()->kind != ShaderGraphNodeKind::Output)
+    unsigned outputCount = 0;
+    for (const ShaderGraphNode& node : nodes_)
+    {
+        if (node.id != 0 && node.kind == ShaderGraphNodeKind::Output)
+            ++outputCount;
+    }
+    if (outputNodeId_ == 0 || !GetOutputNode() || GetOutputNode()->kind != ShaderGraphNodeKind::Output || outputCount != 1)
     {
         if (error)
-            *error = "ShaderGraph requires one Output node.";
+            *error = "ShaderGraph requires exactly one Output node.";
         return false;
     }
     ea::unordered_map<ea::string, bool> parameterNames;
@@ -136,6 +142,28 @@ bool ShaderGraph::Validate(ea::string* error) const
             return false;
         }
         parameterNames[parameter.name] = true;
+    }
+    for (const ShaderGraphNode& node : nodes_)
+    {
+        if (node.id == 0 || (node.kind != ShaderGraphNodeKind::Parameter && node.kind != ShaderGraphNodeKind::TextureSample))
+            continue;
+        const ea::string referencedName = node.value.GetType() == VAR_STRING ? node.value.GetString() : node.name;
+        const auto parameter = std::find_if(parameters_.begin(), parameters_.end(), [&](const ShaderGraphParameter& candidate)
+        {
+            return candidate.name == referencedName;
+        });
+        if (parameter == parameters_.end())
+        {
+            if (error)
+                *error = "ShaderGraph node references a missing parameter: " + referencedName;
+            return false;
+        }
+        if (node.kind == ShaderGraphNodeKind::TextureSample && parameter->type != ShaderGraphValueType::Texture2D)
+        {
+            if (error)
+                *error = "ShaderGraph TextureSample requires a Texture2D parameter: " + referencedName;
+            return false;
+        }
     }
     ea::unordered_map<unsigned, ea::unordered_map<ea::string, bool>> pins;
     for (const ShaderGraphConnection& connection : connections_)
@@ -201,6 +229,12 @@ ea::string ShaderGraph::Generate(ShaderGraphLanguage language, ea::string* error
             source += " u_";
             source += Sanitize(parameter.name);
             source += ";\n";
+            if (parameter.type == ShaderGraphValueType::Texture2D)
+            {
+                source += "SamplerState u_";
+                source += Sanitize(parameter.name);
+                source += "Sampler;\n";
+            }
         }
         source += "float4 main(PSInput input) : SV_Target { return ";
         source += expression;

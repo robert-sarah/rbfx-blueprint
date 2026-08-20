@@ -62,6 +62,43 @@ TEST_CASE("ShaderGraphResource round-trips deterministic JSON assets", "[shader-
     CHECK_FALSE(loaded->FromJSON(invalid, &error));
 }
 
+TEST_CASE("ShaderGraph rejects missing parameters and duplicate output nodes", "[shader-graph]")
+{
+    ShaderGraph missingParameter;
+    const unsigned parameter = missingParameter.AddNode("Missing", ShaderGraphNodeKind::Parameter,
+        ShaderGraphValueType::Color, Variant(ea::string("Missing")));
+    const unsigned output = missingParameter.AddNode("Output", ShaderGraphNodeKind::Output, ShaderGraphValueType::Color);
+    REQUIRE(missingParameter.Connect(parameter, "value", output, "color"));
+    REQUIRE(missingParameter.SetOutputNode(output));
+    ea::string error;
+    CHECK_FALSE(missingParameter.Validate(&error));
+    CHECK(error.find("missing parameter") != ea::string::npos);
+
+    ShaderGraph duplicateOutputs;
+    const unsigned firstOutput = duplicateOutputs.AddNode("First", ShaderGraphNodeKind::Output, ShaderGraphValueType::Color);
+    duplicateOutputs.AddNode("Second", ShaderGraphNodeKind::Output, ShaderGraphValueType::Color);
+    REQUIRE(duplicateOutputs.SetOutputNode(firstOutput));
+    error.clear();
+    CHECK_FALSE(duplicateOutputs.Validate(&error));
+    CHECK(error.find("exactly one Output") != ea::string::npos);
+}
+
+TEST_CASE("ShaderGraph emits HLSL sampler state for texture parameters", "[shader-graph]")
+{
+    ShaderGraph graph;
+    REQUIRE(graph.SetParameter({"Albedo", ShaderGraphValueType::Texture2D, Variant()}));
+    const unsigned texture = graph.AddNode("Albedo", ShaderGraphNodeKind::TextureSample,
+        ShaderGraphValueType::Color, Variant(ea::string("Albedo")));
+    const unsigned output = graph.AddNode("Output", ShaderGraphNodeKind::Output, ShaderGraphValueType::Color);
+    REQUIRE(graph.Connect(texture, "color", output, "color"));
+    REQUIRE(graph.SetOutputNode(output));
+    ea::string error;
+    const ea::string hlsl = graph.GenerateHLSL(&error);
+    REQUIRE_FALSE(hlsl.empty());
+    CHECK(hlsl.find("Texture2D u_Albedo") != ea::string::npos);
+    CHECK(hlsl.find("SamplerState u_AlbedoSampler") != ea::string::npos);
+}
+
 TEST_CASE("ShaderGraph rejects cycles and duplicate input connections", "[shader-graph]")
 {
     ShaderGraph graph;
