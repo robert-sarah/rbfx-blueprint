@@ -4,6 +4,7 @@
 #include <catch2/catch_amalgamated.hpp>
 
 #include <Urho3D/RbScript/RbScriptLexer.h>
+#include <Urho3D/RbScript/RbScriptSyntaxHighlighter.h>
 
 using namespace Urho3D;
 
@@ -64,6 +65,41 @@ TEST_CASE("rbscript lexer handles comments and escaped strings", "[rbscript][lex
         }
     }
     REQUIRE(foundString);
+}
+
+TEST_CASE("rbscript syntax highlighter classifies token families", "[rbscript][editor][syntax]")
+{
+    CHECK(ClassifyRbScriptSyntax(RbScriptTokenKind::Script, "script") == RbScriptSyntaxCategory::Declaration);
+    CHECK(ClassifyRbScriptSyntax(RbScriptTokenKind::If, "if") == RbScriptSyntaxCategory::ControlFlow);
+    CHECK(ClassifyRbScriptSyntax(RbScriptTokenKind::Const, "const") == RbScriptSyntaxCategory::Modifier);
+    CHECK(ClassifyRbScriptSyntax(RbScriptTokenKind::Await, "await") == RbScriptSyntaxCategory::Async);
+    CHECK(ClassifyRbScriptSyntax(RbScriptTokenKind::IntegerLiteral, "42") == RbScriptSyntaxCategory::Number);
+    CHECK(ClassifyRbScriptSyntax(RbScriptTokenKind::StringLiteral, "text") == RbScriptSyntaxCategory::String);
+    CHECK(ClassifyRbScriptSyntax(RbScriptTokenKind::Identifier, "Vector3") == RbScriptSyntaxCategory::Type);
+    CHECK(ClassifyRbScriptSyntax(RbScriptTokenKind::Identifier, "translate", true) == RbScriptSyntaxCategory::Function);
+    CHECK(ClassifyRbScriptSyntax(RbScriptTokenKind::Plus, "+") == RbScriptSyntaxCategory::Operator);
+    CHECK(ClassifyRbScriptSyntax(RbScriptTokenKind::LeftBrace, "{") == RbScriptSyntaxCategory::Punctuation);
+    CHECK(ToString(RbScriptSyntaxCategory::ControlFlow) == "control-flow");
+}
+
+TEST_CASE("rbscript syntax spans preserve source spelling for highlighting", "[rbscript][editor][syntax]")
+{
+    const ea::string source = "fn draw() { return \"hello\\nworld\"; } // frame\n";
+    RbScriptLexer lexer(source, "Highlight.rbscript");
+    const ea::vector<RbScriptToken> tokens = lexer.Tokenize();
+    REQUIRE(lexer.GetDiagnostics().empty());
+
+    bool foundString = false;
+    for (const RbScriptToken& token : tokens)
+    {
+        if (token.kind != RbScriptTokenKind::StringLiteral)
+            continue;
+        const ea::string spelling = source.substr(token.span.begin.offset,
+            token.span.end.offset - token.span.begin.offset);
+        CHECK(spelling == "\"hello\\nworld\"");
+        foundString = true;
+    }
+    CHECK(foundString);
 }
 
 TEST_CASE("rbscript lexer reports malformed source with locations", "[rbscript][lexer][diagnostics]")

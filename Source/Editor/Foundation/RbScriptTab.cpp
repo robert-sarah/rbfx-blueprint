@@ -14,6 +14,7 @@
 #include <Urho3D/Resource/ResourceCache.h>
 #include <Urho3D/RbScript/RbScriptLexer.h>
 #include <Urho3D/RbScript/RbScriptParser.h>
+#include <Urho3D/RbScript/RbScriptSyntaxHighlighter.h>
 #include <Urho3D/SystemUI/Widgets.h>
 
 namespace Urho3D
@@ -25,52 +26,39 @@ namespace
 const auto Hotkey_Compile = EditorHotkey{"RbScript.Compile"}.Ctrl().Press(KEY_B);
 const auto Hotkey_Save = EditorHotkey{"RbScript.Save"}.Ctrl().Press(KEY_S);
 
-ImVec4 TokenColor(RbScriptTokenKind kind)
+ImVec4 SyntaxCategoryColor(RbScriptSyntaxCategory category)
 {
-    switch (kind)
+    switch (category)
     {
-    case RbScriptTokenKind::Module:
-    case RbScriptTokenKind::Use:
-    case RbScriptTokenKind::Script:
-    case RbScriptTokenKind::Fn:
-    case RbScriptTokenKind::On:
-    case RbScriptTokenKind::Async:
-    case RbScriptTokenKind::Await:
-    case RbScriptTokenKind::Return:
-    case RbScriptTokenKind::If:
-    case RbScriptTokenKind::Else:
-    case RbScriptTokenKind::While:
-    case RbScriptTokenKind::For:
-    case RbScriptTokenKind::In:
-    case RbScriptTokenKind::Let:
-    case RbScriptTokenKind::Var:
-    case RbScriptTokenKind::Const:
-    case RbScriptTokenKind::Struct:
-    case RbScriptTokenKind::Enum:
-    case RbScriptTokenKind::Class:
-    case RbScriptTokenKind::Signal:
-    case RbScriptTokenKind::Emit:
-    case RbScriptTokenKind::Match:
-    case RbScriptTokenKind::Break:
-    case RbScriptTokenKind::Continue:
-    case RbScriptTokenKind::Public:
-    case RbScriptTokenKind::Private:
-    case RbScriptTokenKind::Static:
-        return ImVec4{0.95f, 0.55f, 0.25f, 1.0f};
-    case RbScriptTokenKind::True:
-    case RbScriptTokenKind::False:
-    case RbScriptTokenKind::Null:
-        return ImVec4{0.70f, 0.75f, 1.0f, 1.0f};
-    case RbScriptTokenKind::IntegerLiteral:
-    case RbScriptTokenKind::FloatLiteral:
-        return ImVec4{0.35f, 0.85f, 0.75f, 1.0f};
-    case RbScriptTokenKind::StringLiteral:
-        return ImVec4{0.45f, 0.90f, 0.45f, 1.0f};
-    case RbScriptTokenKind::Identifier:
-        return ImVec4{0.90f, 0.90f, 0.92f, 1.0f};
-    default:
-        return ImVec4{0.72f, 0.75f, 0.80f, 1.0f};
+    case RbScriptSyntaxCategory::Declaration: return ImVec4{1.00f, 0.55f, 0.22f, 1.0f};
+    case RbScriptSyntaxCategory::ControlFlow: return ImVec4{0.40f, 0.72f, 1.00f, 1.0f};
+    case RbScriptSyntaxCategory::Modifier: return ImVec4{0.95f, 0.45f, 0.85f, 1.0f};
+    case RbScriptSyntaxCategory::Async: return ImVec4{0.35f, 0.90f, 0.90f, 1.0f};
+    case RbScriptSyntaxCategory::Literal: return ImVec4{0.72f, 0.70f, 1.00f, 1.0f};
+    case RbScriptSyntaxCategory::Number: return ImVec4{0.35f, 0.90f, 0.72f, 1.0f};
+    case RbScriptSyntaxCategory::String: return ImVec4{0.45f, 0.92f, 0.45f, 1.0f};
+    case RbScriptSyntaxCategory::Type: return ImVec4{0.30f, 0.78f, 1.00f, 1.0f};
+    case RbScriptSyntaxCategory::Function: return ImVec4{1.00f, 0.82f, 0.32f, 1.0f};
+    case RbScriptSyntaxCategory::Identifier: return ImVec4{0.90f, 0.90f, 0.92f, 1.0f};
+    case RbScriptSyntaxCategory::Operator: return ImVec4{0.98f, 0.72f, 0.40f, 1.0f};
+    case RbScriptSyntaxCategory::Punctuation: return ImVec4{0.70f, 0.76f, 0.84f, 1.0f};
+    case RbScriptSyntaxCategory::Comment: return ImVec4{0.45f, 0.52f, 0.58f, 1.0f};
+    case RbScriptSyntaxCategory::Invalid: return ImVec4{1.00f, 0.30f, 0.30f, 1.0f};
+    default: return ImVec4{0.72f, 0.75f, 0.80f, 1.0f};
     }
+}
+
+bool IsCallSite(const ea::vector<RbScriptToken>& tokens, unsigned index)
+{
+    for (unsigned next = index + 1; next < tokens.size(); ++next)
+    {
+        if (tokens[next].kind == RbScriptTokenKind::EndOfFile)
+            return false;
+        if (tokens[next].kind == RbScriptTokenKind::Dot || tokens[next].kind == RbScriptTokenKind::Scope)
+            continue;
+        return tokens[next].kind == RbScriptTokenKind::LeftParen;
+    }
+    return false;
 }
 
 bool IsAbsoluteFileName(const ea::string& path)
@@ -551,34 +539,91 @@ void RbScriptTab::RenderTokenPreview(const Document& document)
     if (!showPreview_)
         return;
 
-    ui::BeginChild("##RbScriptPreview", ImVec2{0.0f, 190.0f}, true);
+    ui::BeginChild("##RbScriptPreview", ImVec2{0.0f, 230.0f}, true);
     ui::Text("Syntax-colored preview");
     ui::SameLine();
-    ui::TextDisabled("keywords blue | types cyan | strings green | comments gray | diagnostics red");
+    ui::TextDisabled("declarations orange | control flow blue | types cyan | functions gold | strings green | comments gray");
     ui::Separator();
 
     ImFont* monoFont = Project::GetMonoFont();
     if (monoFont)
         ui::PushFont(monoFont);
-    unsigned offset = 0;
-    for (const RbScriptToken& token : document.tokens)
+
+    auto renderPlain = [](const ea::string& text)
     {
+        if (text.empty())
+            return;
+        ui::TextUnformatted(text.c_str());
+        if (text.back() != '\n')
+            ui::SameLine(0.0f, 0.0f);
+    };
+    auto renderColored = [](const ea::string& text, const ImVec4& color)
+    {
+        if (text.empty())
+            return;
+        ui::TextColored(color, "%s", text.c_str());
+        if (text.back() != '\n')
+            ui::SameLine(0.0f, 0.0f);
+    };
+    auto renderGap = [&](const ea::string& gap)
+    {
+        unsigned cursor = 0;
+        while (cursor < gap.size())
+        {
+            const ea::string::size_type lineComment = gap.find("//", cursor);
+            const ea::string::size_type blockComment = gap.find("/*", cursor);
+            ea::string::size_type comment = ea::string::npos;
+            if (lineComment != ea::string::npos)
+                comment = lineComment;
+            if (blockComment != ea::string::npos && (comment == ea::string::npos || blockComment < comment))
+                comment = blockComment;
+
+            if (comment == ea::string::npos)
+            {
+                renderPlain(gap.substr(cursor));
+                break;
+            }
+            renderPlain(gap.substr(cursor, comment - cursor));
+
+            if (comment == lineComment)
+            {
+                ea::string::size_type end = gap.find('\n', comment);
+                if (end == ea::string::npos)
+                    end = gap.size();
+                renderColored(gap.substr(comment, end - comment), SyntaxCategoryColor(RbScriptSyntaxCategory::Comment));
+                cursor = static_cast<unsigned>(end);
+            }
+            else
+            {
+                ea::string::size_type close = gap.find("*/", comment + 2);
+                const ea::string::size_type end = close == ea::string::npos ? gap.size() : close + 2;
+                renderColored(gap.substr(comment, end - comment), SyntaxCategoryColor(RbScriptSyntaxCategory::Comment));
+                cursor = static_cast<unsigned>(end);
+            }
+        }
+    };
+
+    unsigned offset = 0;
+    for (unsigned i = 0; i < document.tokens.size(); ++i)
+    {
+        const RbScriptToken& token = document.tokens[i];
         if (token.kind == RbScriptTokenKind::EndOfFile)
             break;
 
         if (token.span.begin.offset > offset)
-        {
-            const ea::string whitespace = document.source.substr(offset, token.span.begin.offset - offset);
-            ui::TextUnformatted(whitespace.c_str());
-            if (!whitespace.empty() && whitespace.back() != '\n')
-                ui::SameLine(0.0f, 0.0f);
-        }
+            renderGap(document.source.substr(offset, token.span.begin.offset - offset));
 
-        ui::TextColored(TokenColor(token.kind), "%s", token.lexeme.c_str());
-        if (token.lexeme.find('\n') == ea::string::npos)
-            ui::SameLine(0.0f, 0.0f);
-        offset = token.span.end.offset;
+        const unsigned begin = token.span.begin.offset;
+        const unsigned end = token.span.end.offset;
+        const ea::string sourceLexeme = end >= begin && end <= document.source.size()
+            ? document.source.substr(begin, end - begin) : token.lexeme;
+        const RbScriptSyntaxCategory category = ClassifyRbScriptSyntax(token.kind, token.lexeme, IsCallSite(document.tokens, i));
+        renderColored(sourceLexeme, SyntaxCategoryColor(category));
+        offset = end;
     }
+    if (offset < document.source.size())
+        renderGap(document.source.substr(offset));
+
     if (monoFont)
         ui::PopFont();
     ui::EndChild();
