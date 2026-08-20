@@ -6,6 +6,8 @@
 #include <Urho3D/Resource/ResourceCache.h>
 #include <Urho3D/SystemUI/SystemUI.h>
 
+#include <algorithm>
+
 namespace Urho3D
 {
 
@@ -82,6 +84,8 @@ WorldFabricTab::WorldFabricTab(Context* context)
     , preview_(context)
 {
     ResetTemplate();
+    terrainHeights_.assign(static_cast<size_t>(terrainWidth_) * terrainHeight_, 0.0f);
+    terrainDigest_ = TerrainAuthoring::ComputeDigest(terrainHeights_, terrainWidth_, terrainHeight_);
 }
 
 bool WorldFabricTab::CanOpenResource(const ResourceFileDescriptor& desc)
@@ -890,6 +894,68 @@ void WorldFabricTab::RenderBuildCapsule(const WorldFabricGraphResource& resource
         ui::BulletText("%s [%s] digest=%llu", entry.path.c_str(), entry.category.c_str(), entry.contentDigest);
 }
 
+void WorldFabricTab::RenderTerrainAuthoring()
+{
+    ui::Separator();
+    ui::Text("Deterministic Terrain Authoring");
+    if (terrainHeights_.size() != static_cast<size_t>(terrainWidth_) * terrainHeight_)
+        terrainHeights_.assign(static_cast<size_t>(terrainWidth_) * terrainHeight_, 0.0f);
+
+    ui::Text("Heightfield preview: %ux%u samples", terrainWidth_, terrainHeight_);
+    static const char* falloffs[] = {"Constant", "Linear", "SmoothStep"};
+    int falloff = static_cast<int>(terrainBrushFalloff_);
+    if (ui::Combo("Falloff", &falloff, falloffs, IM_ARRAYSIZE(falloffs)))
+        terrainBrushFalloff_ = static_cast<unsigned>(std::clamp(falloff, 0, 2));
+    terrainBrushSettings_.falloff = static_cast<TerrainBrushFalloff>(terrainBrushFalloff_);
+    ui::SliderFloat("Brush Radius", &terrainBrushSettings_.radius, 0.5f, 16.0f, "%.2f");
+    ui::SliderFloat("Brush Strength", &terrainBrushSettings_.strength, -1.0f, 1.0f, "%.2f");
+    ui::SliderFloat("Center X", &terrainBrushCenterX_, 0.0f, static_cast<float>(terrainWidth_ - 1), "%.1f");
+    ui::SliderFloat("Center Y", &terrainBrushCenterY_, 0.0f, static_cast<float>(terrainHeight_ - 1), "%.1f");
+    int resolution = static_cast<int>(terrainBrushSettings_.resolution);
+    if (ui::SliderInt("Brush Resolution", &resolution, 2, 128))
+        terrainBrushSettings_.resolution = static_cast<unsigned>(std::clamp(resolution, 2, 128));
+
+    if (ui::Button("Reset Terrain Preview"))
+    {
+        terrainHeights_.assign(static_cast<size_t>(terrainWidth_) * terrainHeight_, 0.0f);
+        terrainDigest_ = TerrainAuthoring::ComputeDigest(terrainHeights_, terrainWidth_, terrainHeight_);
+        status_ = "Terrain preview reset";
+    }
+    ui::SameLine();
+    if (ui::Button("Stamp Height"))
+    {
+        std::string error;
+        if (TerrainAuthoring::ApplyHeightStamp(terrainHeights_, terrainWidth_, terrainHeight_, terrainBrushCenterX_,
+                terrainBrushCenterY_, terrainBrushSettings_, &error))
+        {
+            terrainDigest_ = TerrainAuthoring::ComputeDigest(terrainHeights_, terrainWidth_, terrainHeight_);
+            status_ = Format("Terrain stamp applied; digest {}", terrainDigest_);
+        }
+        else
+            status_ = Format("Terrain stamp rejected: {}", error);
+    }
+    ui::Text("Digest: %llu", terrainDigest_);
+    if (!status_.empty())
+        ui::TextUnformatted(status_.c_str());
+
+    const unsigned stepX = std::max(1u, terrainWidth_ / 8u);
+    const unsigned stepY = std::max(1u, terrainHeight_ / 8u);
+    if (ui::BeginTable("TerrainHeightPreview", 8, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV
+            | ImGuiTableFlags_SizingStretchSame))
+    {
+        for (unsigned y = 0; y < terrainHeight_; y += stepY)
+        {
+            ui::TableNextRow();
+            for (unsigned x = 0; x < terrainWidth_ && x / stepX < 8; x += stepX)
+            {
+                ui::TableSetColumnIndex(static_cast<int>(x / stepX));
+                ui::Text("%.2f", terrainHeights_[static_cast<size_t>(y) * terrainWidth_ + x]);
+            }
+        }
+        ui::EndTable();
+    }
+}
+
 void WorldFabricTab::RenderContent()
 {
     WorldFabricGraphResource& resource = GetWorldFabric();
@@ -918,6 +984,7 @@ void WorldFabricTab::RenderContent()
     RenderCausalDebugger(resource);
     RenderTimeMachine(resource);
     RenderBuildCapsule(resource);
+    RenderTerrainAuthoring();
     if (!validationError_.empty())
         ui::TextColored(ImVec4(1.0f, 0.35f, 0.25f, 1.0f), "Error: %s", validationError_.c_str());
 }

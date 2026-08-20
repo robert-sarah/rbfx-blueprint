@@ -5,10 +5,13 @@
 #include <Urho3D/WorldFabric/CausalWorldFabricDebugger.h>
 #include <Urho3D/WorldFabric/DeterministicSimulation.h>
 #include <Urho3D/WorldFabric/SemanticBuildCapsule.h>
+#include <Urho3D/WorldFabric/TerrainAuthoring.h>
 #include <Urho3D/WorldFabric/UniversalDeterministicTimeMachine.h>
 #include <Urho3D/WorldFabric/WorldFabricCollaboration.h>
 #include <Urho3D/WorldFabric/WorldFabricGraphResource.h>
 #include <Urho3D/WorldFabric/WorldFabricProfiler.h>
+
+#include <vector>
 
 namespace Urho3D
 {
@@ -65,6 +68,7 @@ private:
     void RenderCausalDebugger(const WorldFabricGraphResource& resource);
     void RenderTimeMachine(const WorldFabricGraphResource& resource);
     void RenderBuildCapsule(const WorldFabricGraphResource& resource);
+    void RenderTerrainAuthoring();
 
     SharedPtr<WorldFabricGraphResource> resource_;
     WorldFabricGraphResource preview_;
@@ -96,6 +100,14 @@ private:
     ea::string capsuleStatus_;
     unsigned long long capsuleDigest_{};
     int timeMachineStepDelta_{1};
+    std::vector<float> terrainHeights_;
+    TerrainBrushSettings terrainBrushSettings_;
+    unsigned terrainWidth_{32};
+    unsigned terrainHeight_{32};
+    float terrainBrushCenterX_{16.0f};
+    float terrainBrushCenterY_{16.0f};
+    unsigned terrainBrushFalloff_{static_cast<unsigned>(TerrainBrushFalloff::SmoothStep)};
+    unsigned long long terrainDigest_{};
 };
 
 } // namespace Urho3D
