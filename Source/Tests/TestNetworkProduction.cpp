@@ -110,6 +110,70 @@ TEST_CASE("Rollback manager replays inputs after authoritative frame")
     CHECK(rollback.FindState(static_cast<NetworkFrame>(3)));
 }
 
+TEST_CASE("Rollback manager orders inputs and reports prediction divergence")
+{
+    RollbackManager rollback(8);
+    rollback.SaveState(static_cast<NetworkFrame>(2), StringVariantMap{{"value", Variant(5)}});
+    rollback.RecordInput({static_cast<NetworkFrame>(4), StringVariantMap{{"delta", Variant(4)}}});
+    rollback.RecordInput({static_cast<NetworkFrame>(3), StringVariantMap{{"delta", Variant(3)}}});
+
+    StringVariantMap corrected;
+    const StringVariantMap authoritative{{"value", Variant(2)}};
+    CHECK(rollback.Reconcile(static_cast<NetworkFrame>(2), authoritative,
+        [](const StringVariantMap& input, StringVariantMap& state)
+        {
+            state["value"] = state.at("value").GetInt() + input.at("delta").GetInt();
+            return true;
+        }, corrected));
+    CHECK(corrected.at("value").GetInt() == 9);
+    CHECK(rollback.GetInputs().at(0).frame == static_cast<NetworkFrame>(3));
+    CHECK(rollback.GetInputs().at(1).frame == static_cast<NetworkFrame>(4));
+    CHECK(rollback.GetLastDiagnostics().diverged);
+    CHECK(rollback.GetLastDiagnostics().predictedInputs == 2);
+    CHECK(rollback.GetLastDiagnostics().replayedInputs == 2);
+    CHECK(rollback.GetLastDiagnostics().rejectedInputs == 0);
+}
+
+TEST_CASE("Rollback manager validates resynchronization checkpoints")
+{
+    RollbackManager rollback(8);
+    const StringVariantMap state{{"tick", Variant(12)}};
+    RollbackResynchronization checkpoint;
+    checkpoint.frame = static_cast<NetworkFrame>(12);
+    checkpoint.state = state;
+    checkpoint.digest = RollbackManager::ComputeStateDigest(state);
+
+    StringVariantMap corrected;
+    CHECK(rollback.ApplyResynchronization(checkpoint,
+        [](const StringVariantMap&, StringVariantMap&)
+        {
+            return true;
+        }, corrected));
+    CHECK(corrected.at("tick").GetInt() == 12);
+    CHECK(rollback.GetLastDiagnostics().authoritativeDigest == checkpoint.digest);
+
+    checkpoint.digest += 1;
+    CHECK_FALSE(rollback.ApplyResynchronization(checkpoint, {}, corrected));
+    CHECK(rollback.GetLastDiagnostics().diverged);
+}
+
+TEST_CASE("Rollback manager state digest is insertion-order independent")
+{
+    StringVariantMap first;
+    first["health"] = Variant(100);
+    first["round"] = Variant(3);
+    first["confirmed"] = Variant(true);
+
+    StringVariantMap second;
+    second["confirmed"] = Variant(true);
+    second["round"] = Variant(3);
+    second["health"] = Variant(100);
+
+    CHECK(RollbackManager::ComputeStateDigest(first) == RollbackManager::ComputeStateDigest(second));
+    first["health"] = Variant(99);
+    CHECK(RollbackManager::ComputeStateDigest(first) != RollbackManager::ComputeStateDigest(second));
+}
+
 TEST_CASE("Blueprint runtime exposes production network nodes")
 {
     BlueprintRuntime runtime;
