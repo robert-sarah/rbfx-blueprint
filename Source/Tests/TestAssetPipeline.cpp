@@ -169,3 +169,54 @@ TEST_CASE("Asset importer invalidates cached dependents through dependency graph
     REQUIRE(dirty == ea::vector<ea::string>({"levels/demo.scene", "materials/hero.mat"}));
     REQUIRE(importer.GetCache().GetEntryCount() == 0);
 }
+
+TEST_CASE("Asset importer normalizes extensions and validates import requests", "[assets][production][validation]")
+{
+    AssetImporter importer;
+    unsigned callbackCount = 0;
+    importer.RegisterRule({"FBX", "ModelImporter", 4,
+        [&](const ea::string&, const ea::string&, const AssetImportSettings&, const ea::string&,
+            ea::vector<ea::string>&, ea::string&)
+        {
+            ++callbackCount;
+            return true;
+        }});
+
+    AssetImportSettings settings;
+    settings.importer = "ModelImporter";
+    const AssetImportResult uppercase = importer.Import(
+        "Characters/Hero.FbX", "fbx-source", settings, "Cooked/Hero.model");
+    REQUIRE(uppercase.success);
+    REQUIRE(callbackCount == 1);
+
+    const AssetImportResult emptySource = importer.Import(
+        "Characters/Hero.FBX", "", settings, "Cooked/Hero.model");
+    REQUIRE_FALSE(emptySource.success);
+    REQUIRE(emptySource.error.find("source data") != ea::string::npos);
+
+    const AssetImportResult emptyOutput = importer.Import(
+        "Characters/Hero.FBX", "fbx-source", settings, "");
+    REQUIRE_FALSE(emptyOutput.success);
+    REQUIRE(emptyOutput.error.find("output path") != ea::string::npos);
+
+    settings.importer = "TextureImporter";
+    const AssetImportResult mismatchedProfile = importer.Import(
+        "Characters/Hero.FBX", "fbx-source", settings, "Cooked/Hero.model");
+    REQUIRE_FALSE(mismatchedProfile.success);
+    REQUIRE(mismatchedProfile.error.find("requests importer") != ea::string::npos);
+    REQUIRE(callbackCount == 1);
+}
+
+TEST_CASE("Asset importer unregisters normalized extensions", "[assets][production][validation]")
+{
+    AssetImporter importer;
+    importer.RegisterRule({"GLTF", "ModelImporter", 1, {}});
+    AssetImportSettings settings;
+    REQUIRE(importer.Import("props/Crate.gltf", "gltf-source", settings, "Cooked/Crate.model").success);
+
+    importer.UnregisterRule("gLtF");
+    const AssetImportResult removed = importer.Import(
+        "props/Crate.GLTF", "gltf-source", settings, "Cooked/Crate.model");
+    REQUIRE_FALSE(removed.success);
+    REQUIRE(removed.error.find("No importer registered") != ea::string::npos);
+}

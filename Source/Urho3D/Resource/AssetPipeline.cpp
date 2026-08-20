@@ -24,6 +24,16 @@ void SetError(ea::string* error, const ea::string& message)
         *error = message;
 }
 
+ea::string NormalizeExtension(ea::string extension)
+{
+    for (char& character : extension)
+    {
+        if (character >= 'A' && character <= 'Z')
+            character = static_cast<char>(character - 'A' + 'a');
+    }
+    return extension;
+}
+
 JSONValue VariantToJSON(const Variant& value)
 {
     switch (value.GetType())
@@ -440,13 +450,15 @@ bool AssetDependencyGraph::Validate(ea::string* error) const
 
 void AssetImporter::RegisterRule(const AssetImporterRule& rule)
 {
-    if (!rule.extension.empty())
-        rules_[rule.extension] = rule;
+    AssetImporterRule normalized = rule;
+    normalized.extension = NormalizeExtension(normalized.extension);
+    if (!normalized.extension.empty())
+        rules_[normalized.extension] = ea::move(normalized);
 }
 
 void AssetImporter::UnregisterRule(const ea::string& extension)
 {
-    rules_.erase(extension);
+    rules_.erase(NormalizeExtension(extension));
 }
 
 const AssetImporterRule* AssetImporter::FindRule(const ea::string& assetId) const
@@ -454,7 +466,7 @@ const AssetImporterRule* AssetImporter::FindRule(const ea::string& assetId) cons
     const auto dot = assetId.find_last_of('.');
     if (dot == ea::string::npos)
         return nullptr;
-    const ea::string extension = assetId.substr(dot + 1);
+    const ea::string extension = NormalizeExtension(assetId.substr(dot + 1));
     const auto iter = rules_.find(extension);
     return iter != rules_.end() ? &iter->second : nullptr;
 }
@@ -474,12 +486,36 @@ AssetImportResult AssetImporter::Import(const ea::string& assetId, const ea::str
     AssetImportResult result;
     result.assetId = assetId;
     result.outputPath = outputPath;
+
+    if (assetId.empty())
+    {
+        result.error = "Asset import requires a non-empty asset id.";
+        return result;
+    }
+    if (sourceData.empty())
+    {
+        result.error = Format("Asset '{}' has no source data.", assetId);
+        return result;
+    }
+    if (outputPath.empty())
+    {
+        result.error = Format("Asset '{}' has no cooked output path.", assetId);
+        return result;
+    }
+
     result.sourceHash = MakeHash(sourceData);
 
     const AssetImporterRule* rule = FindRule(assetId);
     if (!rule)
     {
         result.error = Format("No importer registered for asset '{}'.", assetId);
+        return result;
+    }
+    if (!settings.importer.empty() && settings.importer != "Generic" && !rule->name.empty()
+        && settings.importer != rule->name)
+    {
+        result.error = Format("Asset '{}' requests importer '{}' but rule '{}' is registered.",
+            assetId, settings.importer, rule->name);
         return result;
     }
     result.settingsHash = CalculateSettingsHash(*rule, settings);
