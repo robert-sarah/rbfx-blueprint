@@ -70,6 +70,10 @@ public:
     void RenameSelected();
     void RevealInExplorerSelected();
     void OpenSelected();
+    bool NavigateBack();
+    bool NavigateForward();
+    bool ToggleFavoriteCurrentFolder();
+    bool IsCurrentFolderFavorite() const;
     /// @}
 
     /// Implement EditorTab
@@ -91,6 +95,10 @@ private:
         ea::string resourcePath_;
 
         bool operator<(const EntryReference& rhs) const;
+        bool operator==(const EntryReference& rhs) const
+        {
+            return rootIndex_ == rhs.rootIndex_ && resourcePath_ == rhs.resourcePath_;
+        }
     };
 
     struct ResourceRoot
@@ -138,6 +146,8 @@ private:
 
     /// Common rendering
     /// @{
+    void RenderNavigationBar();
+    void RenderBreadcrumbs();
     void RenderDialogs();
 
     void RenderEntryContextMenu(const FileSystemEntry& entry);
@@ -193,6 +203,8 @@ private:
         unsigned newRootIndex, const ea::string& newResourceName);
     void ScrollToSelection();
     void OnSelectionChanged(bool sendEmptyEvent = false);
+    void RecordNavigation(const EntryReference& reference);
+    void RestoreNavigation(const EntryReference& reference);
     /// @}
 
     /// Manipulation utilities and helpers
@@ -246,6 +258,11 @@ private:
         ea::string selectedPath_{};
         bool isLeftPanel_{};
     } cursor_;
+
+    ea::vector<EntryReference> navigationHistory_;
+    int navigationCursor_{-1};
+    ea::vector<EntryReference> favoriteFolders_;
+    bool restoringNavigation_{};
 
     struct RenameDialog
     {

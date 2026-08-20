@@ -8,7 +8,7 @@ The following evidence was recorded from the `blueprint-foundation` branch after
 | --- | --- | --- |
 | Linux CMake configuration | Passed | Testing configuration completed with editor and player disabled |
 | `Tests` target compilation | Passed | Catch2 test binary built successfully |
-| Coherent full CTest run after native target validation | **415/415 passed** | No failed test cases in the coherent Linux build; BuildGraph cooking-plan, editor production validation, model-import profile, AssetPipeline integration, package-provenance and target-matrix tests are included |
+| Coherent editor-enabled full CTest run | **418/418 passed** | No failed test cases in the coherent Linux editor build; editor theme, Blueprint, RbScript completion, Resource Browser and Console changes compile and are included |
 | Rollback diagnostics | Covered | Prediction, authoritative digest comparison, divergence reporting, and resynchronization are exercised |
 | 1v1 competitive demo | Covered | Delayed remote input creates measurable divergence and rollback restores exact convergence |
 | Time-machine replay persistence | Covered | JSON export/import is round-tripped and tampered digests are rejected atomically |
@@ -25,26 +25,26 @@ The following evidence was recorded from the `blueprint-foundation` branch after
 | Native target and compression matrix | Passed | Linux/Windows x64 and arm64, macOS x64/arm64/universal, WebAssembly wasm32, Android arm64-v8a/armeabi-v7a/x86_64 and iOS arm64 are validated against platform-specific BC/ASTC/ETC2 profiles; Android and iOS adapters are available |
 | Windows runtime package | Available | The fixed package uses a statically linked C++ runtime and includes the required runtime resources |
 
-The test command used for the clean Linux evidence was:
+The editor-enabled test command used for the coherent Linux evidence was:
 
 ```bash
-cmake -S . -B build-tests -G Ninja \
+cmake -S . -B build-editor -G Ninja \
   -DURHO3D_TESTING=ON \
-  -DURHO3D_EDITOR=OFF \
+  -DURHO3D_EDITOR=ON \
   -DURHO3D_PLAYER=OFF \
   -DURHO3D_CSHARP=OFF
-cmake --build build-tests --target Tests -j2
-ctest --test-dir build-tests --output-on-failure
+ninja -C build-editor Tests -j1
+ctest --test-dir build-editor --output-on-failure
 ```
 
 The final coherent model-import validation CTest report is:
 
 ```text
-100% tests passed, 0 tests failed out of 415
-Total Test time (real) = 253.37 sec
+100% tests passed, 0 tests failed out of 418
+Total Test time (real) = 256.46 sec
 ```
 
-The phase 9 cases cover case-insensitive model extensions, empty source data, missing cooked output paths, mismatched importer profiles, and normalized rule removal. The phase 10 cases cover required metadata for LOD, texture and provenance tasks, plus digest stability under metadata insertion-order changes. The phase 11 cases cover reference editor workspaces, 2D/3D exclusivity, autosave bounds and readiness, recovery warnings, and stable validation digests. The model-import cases cover complete profile JSON round trips, format normalization, unsafe units/UV/LOD values, schema completeness, provenance-sensitive digests, effective AssetImportSettings JSON persistence, cache-hash participation, early importer rejection, cache reuse, and profile-driven invalidation. The packaging cases cover recipe and cache identifiers, per-file provenance, canonical manifest digests, round-trip stability, native target adapters, architecture compatibility, and platform-specific texture compression. They are included in the 415 registered Catch2 cases.
+The phase 9 cases cover case-insensitive model extensions, empty source data, missing cooked output paths, mismatched importer profiles, and normalized rule removal. The phase 10 cases cover required metadata for LOD, texture and provenance tasks, plus digest stability under metadata insertion-order changes. The phase 11 cases cover reference editor workspaces, 2D/3D exclusivity, autosave bounds and readiness, recovery warnings, and stable validation digests. The model-import cases cover complete profile JSON round trips, format normalization, unsafe units/UV/LOD values, schema completeness, provenance-sensitive digests, effective AssetImportSettings JSON persistence, cache-hash participation, early importer rejection, cache reuse, and profile-driven invalidation. The packaging cases cover recipe and cache identifiers, per-file provenance, canonical manifest digests, round-trip stability, native target adapters, architecture compatibility, and platform-specific texture compression. They are included in the 418 registered Catch2 cases. The editor brief implementation audit additionally records the verified scope and the remaining native GUI/LSP/backend boundaries.
 
 ## Published commits
 
@@ -69,11 +69,11 @@ The phase 9 cases cover case-insensitive model extensions, empty source data, mi
 | `deb2923` | Add editor production validation scenarios and CMake test integration |
 | `756f09d` | Add deterministic model import profiles and documentation |
 
-All commits through `deb2923` are published on [`blueprint-foundation`](https://github.com/robert-sarah/rbfx-blueprint/tree/blueprint-foundation). The model-profile commits `756f09d` and `a67df22` are committed locally with passing validation and are pending publication because the current GitHub CLI credential has expired; no local changes are lost.
+The model-profile, package-provenance and native-target commits are published on [`blueprint-foundation`](https://github.com/robert-sarah/rbfx-blueprint/tree/blueprint-foundation). The current editor-brief changes are being validated in the local working tree before their dedicated publication commit; no local changes are lost.
 
 ## Evidence boundaries
 
-This evidence is strong for the deterministic contracts and testable production services covered by the repository. The 413/413 result comes from one coherent Linux build directory after the packaging provenance changes; it is not assembled by mixing objects or shared libraries from different configurations. It is not a substitute for native graphical certification on every supported operating system, a long-duration network soak under the target packet-loss profile, or validation of a specific commercial game's third-party physics, audio, rendering, or platform middleware. Those checks remain release gates for each project that adopts the engine.
+This evidence is strong for the deterministic contracts and testable production services covered by the repository. The 418/418 result comes from one coherent editor-enabled Linux build directory; it is not assembled by mixing objects or shared libraries from different configurations. It is not a substitute for native graphical certification on every supported operating system, a long-duration network soak under the target packet-loss profile, or validation of a specific commercial game's third-party physics, audio, rendering, or platform middleware. Those checks remain release gates for each project that adopts the engine.
 
 ## References
 

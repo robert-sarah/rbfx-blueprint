@@ -80,17 +80,17 @@ public:
     void SetLevelVisible(LogLevel level, bool visible);
     /// Get visibility of certain log levels in the console.
     bool GetLevelVisible(LogLevel level) const;
+    /// Enable or disable visual grouping of consecutive identical log rows.
+    void SetGroupRepeats(bool enable) { groupRepeats_ = enable; }
+    /// Return whether repeated identical rows are grouped.
+    bool IsGroupRepeats() const { return groupRepeats_; }
+    /// Return the number of rows currently retained for a severity level.
+    unsigned GetLevelCount(LogLevel level) const
+    {
+        return level >= LOG_TRACE && level < LOG_NONE ? levelCounts_[level] : 0;
+    }
 
 private:
-    /// Update console size on application window changes.
-    void HandleScreenMode(StringHash eventType, VariantMap& eventData);
-    /// Handle a log message.
-    void HandleLogMessage(StringHash eventType, VariantMap& eventData);
-    /// Render system ui.
-    void RenderUi(StringHash eventType, VariantMap& eventData);
-    /// Scroll console to the end.
-    void ScrollToEnd() { scrollToEnd_ = 2; }
-
     struct LogEntry
     {
         /// Log level.
@@ -101,7 +101,21 @@ private:
         ea::string logger_;
         /// Log message.
         ea::string message_;
+        /// Number of consecutive identical rows represented by this entry.
+        unsigned repeatCount_{1};
     };
+
+    /// Update console size on application window changes.
+    void HandleScreenMode(StringHash eventType, VariantMap& eventData);
+    /// Handle a log message.
+    void HandleLogMessage(StringHash eventType, VariantMap& eventData);
+    void AppendLogEntry(LogEntry entry);
+    void RemoveLogEntry(const LogEntry& entry);
+    void RebuildLevelCounts();
+    /// Render system ui.
+    void RenderUi(StringHash eventType, VariantMap& eventData);
+    /// Scroll console to the end.
+    void ScrollToEnd() { scrollToEnd_ = 2; }
 
     /// Auto visible on error flag.
     bool autoVisibleOnError_ = false;
@@ -115,6 +129,10 @@ private:
     ea::ring_buffer<LogEntry> history_{2000};
     /// Command history maximum rows.
     unsigned historyRows_ = 512;
+    /// Group consecutive identical messages into a single visible row.
+    bool groupRepeats_ = true;
+    /// Counts of retained rows by severity.
+    unsigned levelCounts_[LOG_NONE]{};
     /// Is console window open.
     bool isOpen_ = false;
     /// Input box buffer.

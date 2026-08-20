@@ -3,7 +3,9 @@
 
 #include "RbScriptTab.h"
 
+#include "../Core/EditorTheme.h"
 #include "../Core/IniHelpers.h"
+#include <Urho3D/RbScript/RbScriptCompletion.h>
 #include <Urho3D/RbScript/RbScriptEditorContract.h>
 #include "ResourceBrowserTab.h"
 
@@ -25,6 +27,19 @@ namespace
 
 const auto Hotkey_Compile = EditorHotkey{"RbScript.Compile"}.Ctrl().Press(KEY_B);
 const auto Hotkey_Save = EditorHotkey{"RbScript.Save"}.Ctrl().Press(KEY_S);
+
+ImVec4 CompletionKindColor(RbScriptCompletionKind kind)
+{
+    switch (kind)
+    {
+    case RbScriptCompletionKind::Keyword: return ImVec4{0.40f, 0.72f, 1.00f, 1.0f};
+    case RbScriptCompletionKind::Type: return ImVec4{0.30f, 0.78f, 1.00f, 1.0f};
+    case RbScriptCompletionKind::Function: return ImVec4{1.00f, 0.82f, 0.32f, 1.0f};
+    case RbScriptCompletionKind::Variable: return ImVec4{0.45f, 0.92f, 0.45f, 1.0f};
+    case RbScriptCompletionKind::Member: return ImVec4{0.72f, 0.70f, 1.00f, 1.0f};
+    default: return ImVec4{0.72f, 0.75f, 0.80f, 1.0f};
+    }
+}
 
 ImVec4 SyntaxCategoryColor(RbScriptSyntaxCategory category)
 {
@@ -534,6 +549,154 @@ void RbScriptTab::RenderDebugPanel(Document& document)
     }
 }
 
+void RbScriptTab::RenderInlineSourceEditor(Document& document)
+{
+    const ImVec2 editorSize = ImVec2{0.0f, showPreview_ ? -210.0f : -150.0f};
+    const ImVec2 origin = ui::GetCursorScreenPos() + ImVec2{5.0f, 5.0f};
+    ImDrawList* drawList = ui::GetWindowDrawList();
+    ImFont* monoFont = Project::GetMonoFont();
+    if (monoFont)
+        ui::PushFont(monoFont);
+
+    const float lineHeight = ImGui::GetTextLineHeightWithSpacing();
+    const float characterWidth = ImGui::CalcTextSize("M").x;
+    unsigned line = 0;
+    unsigned column = 0;
+    auto drawSegment = [&](const ea::string& text, ImU32 color)
+    {
+        ea::string::size_type start = 0;
+        while (start <= text.size())
+        {
+            const ea::string::size_type end = text.find('\n', start);
+            const ea::string::size_type length = end == ea::string::npos ? text.size() - start : end - start;
+            if (length)
+            {
+                const ea::string fragment = text.substr(start, length);
+                drawList->AddText(origin + ImVec2{column * characterWidth, line * lineHeight}, color, fragment.c_str());
+                column += static_cast<unsigned>(length);
+            }
+            if (end == ea::string::npos)
+                break;
+            ++line;
+            column = 0;
+            start = end + 1;
+        }
+    };
+
+    auto drawGap = [&](const ea::string& gap)
+    {
+        unsigned cursor = 0;
+        while (cursor < gap.size())
+        {
+            const ea::string::size_type lineComment = gap.find("//", cursor);
+            const ea::string::size_type blockComment = gap.find("/*", cursor);
+            ea::string::size_type comment = ea::string::npos;
+            if (lineComment != ea::string::npos)
+                comment = lineComment;
+            if (blockComment != ea::string::npos && (comment == ea::string::npos || blockComment < comment))
+                comment = blockComment;
+            if (comment == ea::string::npos)
+            {
+                drawSegment(gap.substr(cursor), EditorThemeColors::TextPrimary);
+                break;
+            }
+            drawSegment(gap.substr(cursor, comment - cursor), EditorThemeColors::TextPrimary);
+            if (comment == lineComment)
+            {
+                ea::string::size_type end = gap.find('\n', comment);
+                if (end == ea::string::npos)
+                    end = gap.size();
+                drawSegment(gap.substr(comment, end - comment), EditorThemeColors::TextMuted);
+                cursor = static_cast<unsigned>(end);
+            }
+            else
+            {
+                const ea::string::size_type close = gap.find("*/", comment + 2);
+                const ea::string::size_type end = close == ea::string::npos ? gap.size() : close + 2;
+                drawSegment(gap.substr(comment, end - comment), EditorThemeColors::TextMuted);
+                cursor = static_cast<unsigned>(end);
+            }
+        }
+    };
+
+    unsigned offset = 0;
+    for (unsigned i = 0; i < document.tokens.size(); ++i)
+    {
+        const RbScriptToken& token = document.tokens[i];
+        if (token.kind == RbScriptTokenKind::EndOfFile)
+            break;
+        if (token.span.begin.offset > offset)
+            drawGap(document.source.substr(offset, token.span.begin.offset - offset));
+
+        const unsigned begin = token.span.begin.offset;
+        const unsigned end = token.span.end.offset;
+        const ea::string lexeme = end >= begin && end <= document.source.size()
+            ? document.source.substr(begin, end - begin) : token.lexeme;
+        drawSegment(lexeme, ImGui::ColorConvertFloat4ToU32(
+            SyntaxCategoryColor(ClassifyRbScriptSyntax(token.kind, token.lexeme, IsCallSite(document.tokens, i)))));
+        offset = end;
+    }
+    if (offset < document.source.size())
+        drawGap(document.source.substr(offset));
+
+    if (monoFont)
+        ui::PopFont();
+
+    const ea::string before = activeSource_;
+    if (monoFont)
+        ui::PushFont(monoFont);
+    ui::PushStyleColor(ImGuiCol_Text, ImVec4{0.0f, 0.0f, 0.0f, 0.0f});
+    ui::PushStyleColor(ImGuiCol_FrameBg, ImVec4{0.0f, 0.0f, 0.0f, 0.0f});
+    ui::PushStyleColor(ImGuiCol_Border, ImVec4{0.0f, 0.0f, 0.0f, 0.0f});
+    const bool changed = ui::InputTextMultiline("##RbScriptSource", &activeSource_, editorSize,
+        ImGuiInputTextFlags_AllowTabInput | ImGuiInputTextFlags_CallbackAlways);
+    ui::PopStyleColor();
+    ui::PopStyleColor();
+    ui::PopStyleColor();
+    sourceFocused_ = ui::IsItemActive();
+    if (monoFont)
+        ui::PopFont();
+
+    if (changed)
+    {
+        document.source = activeSource_;
+        document.dirty = true;
+        RefreshDocument(GetActiveResourceName(), autoCompile_);
+        PushSourceEdit(before, activeSource_);
+    }
+}
+
+void RbScriptTab::RenderContextHelp(const Document& document)
+{
+    if (!showContextHelp_ || !ui::CollapsingHeader("Contextual help", ImGuiTreeNodeFlags_DefaultOpen))
+        return;
+
+    if (selectedSymbol_ >= 0 && selectedSymbol_ < static_cast<int>(document.symbols.size()))
+    {
+        const Document::Symbol& symbol = document.symbols[selectedSymbol_];
+        if (const RbScriptFunctionSignature* function = typeRegistry_.FindFunction(symbol.name))
+        {
+            ui::TextColored(CompletionKindColor(RbScriptCompletionKind::Function), "%s", symbol.name.c_str());
+            ui::TextWrapped("Returns %s | parameters: %u | reflected: %s", function->returnType.ToString().c_str(),
+                static_cast<unsigned>(function->parameterTypes.size()), function->blueprintCallable ? "Blueprint callable" : "rbscript");
+            return;
+        }
+        const RbScriptType type = typeRegistry_.Resolve(symbol.name);
+        if (type.IsValid())
+        {
+            ui::TextColored(CompletionKindColor(RbScriptCompletionKind::Type), "%s", symbol.name.c_str());
+            ui::TextWrapped("Type %s | numeric: %s", type.ToString().c_str(), type.IsNumeric() ? "yes" : "no");
+            return;
+        }
+        ui::TextWrapped("%s '%s' at line %u, column %u.", symbol.kind.c_str(), symbol.name.c_str(),
+            symbol.span.begin.line, symbol.span.begin.column);
+        return;
+    }
+
+    ui::TextWrapped("Select a symbol in the outline to inspect its reflected type or function signature.");
+    ui::TextDisabled("Completion ranking prefers local symbols, then parent scope, then global reflection.");
+}
+
 void RbScriptTab::RenderTokenPreview(const Document& document)
 {
     if (!showPreview_)
@@ -661,37 +824,78 @@ void RbScriptTab::InsertCompletion(Document& document, const ea::string& complet
 
 void RbScriptTab::RenderAutocomplete(Document& document)
 {
-    if (!ui::CollapsingHeader("Reflection autocomplete", ImGuiTreeNodeFlags_DefaultOpen))
+    if (!showCompletionPopup_ || !ui::CollapsingHeader("Completion popup", ImGuiTreeNodeFlags_DefaultOpen))
         return;
 
-    ui::TextDisabled("Click a suggestion to replace the identifier at the end of the current source line.");
+    ui::TextDisabled("Arrow keys select; Enter inserts; ranking is local, parent, then reflected global symbols.");
+    ui::SetNextItemWidth(260.0f);
     ui::InputText("Completion filter", &searchText_);
-    if (searchText_.empty())
-        return;
 
-    ea::vector<ea::string> suggestions = {
+    std::vector<RbScriptCompletionItem> candidates;
+    static const char* keywords[] = {
         "module", "use", "script", "fn", "on", "async", "let", "var", "const",
         "if", "else", "while", "return", "emit", "await", "match", "break", "continue",
-        "Vector2", "Vector3", "Quaternion", "Color", "Node", "Component", "Resource", "Variant",
-        "Array", "Map", "Optional",
     };
-    for (const ea::string& name : typeRegistry_.GetTypeNames())
-        suggestions.push_back(name);
-    for (const ea::string& name : typeRegistry_.GetFunctionNames())
-        suggestions.push_back(name);
+    for (const char* keyword : keywords)
+        candidates.push_back({keyword, "rbscript keyword", RbScriptCompletionKind::Keyword, RbScriptCompletionLocation::Global});
 
-    ui::Text("Suggestions from rbfx reflection and rbscript keywords");
-    unsigned shown = 0;
-    for (const ea::string& suggestion : suggestions)
+    for (const Document::Symbol& symbol : document.symbols)
     {
-        if (suggestion.find(searchText_) == ea::string::npos)
-            continue;
-        if (shown++ >= 48)
-            break;
-        if (shown > 1)
-            ui::SameLine();
-        if (ui::SmallButton(suggestion.c_str()))
-            InsertCompletion(document, suggestion);
+        const RbScriptCompletionKind kind = symbol.kind == "function" || symbol.kind == "event"
+            ? RbScriptCompletionKind::Function : RbScriptCompletionKind::Variable;
+        candidates.push_back({symbol.name.c_str(), symbol.kind.c_str(), kind, RbScriptCompletionLocation::Local});
+    }
+
+    for (const ea::string& name : typeRegistry_.GetTypeNames())
+    {
+        const RbScriptType type = typeRegistry_.Resolve(name);
+        candidates.push_back({name.c_str(), type.ToString().c_str(), RbScriptCompletionKind::Type, RbScriptCompletionLocation::Global});
+    }
+    for (const ea::string& name : typeRegistry_.GetFunctionNames())
+    {
+        const RbScriptFunctionSignature* signature = typeRegistry_.FindFunction(name);
+        const ea::string detail = signature ? signature->returnType.ToString() : ea::string{"function"};
+        candidates.push_back({name.c_str(), detail.c_str(), RbScriptCompletionKind::Function, RbScriptCompletionLocation::Global});
+    }
+
+    const std::vector<RbScriptCompletionItem> ranked = RankRbScriptCompletions(
+        searchText_.c_str(), candidates, 48);
+    if (completionSelected_ >= ranked.size())
+        completionSelected_ = ranked.empty() ? 0 : static_cast<unsigned>(ranked.size() - 1);
+
+    if (!ui::BeginChild("##RbScriptCompletionPopup", ImVec2{0.0f, 190.0f}, true))
+    {
+        ui::EndChild();
+        return;
+    }
+    for (unsigned i = 0; i < ranked.size(); ++i)
+    {
+        const RbScriptCompletionItem& item = ranked[i];
+        ui::PushID(static_cast<int>(i));
+        ui::PushStyleColor(ImGuiCol_Text, CompletionKindColor(item.kind));
+        const bool selected = i == completionSelected_;
+        if (ui::Selectable(item.label.c_str(), selected))
+        {
+            InsertCompletion(document, item.label.c_str());
+            completionSelected_ = i;
+        }
+        ui::PopStyleColor();
+        ui::SameLine(230.0f);
+        ui::TextDisabled("%s | score %d", item.detail.c_str(), item.score);
+        if (ui::IsItemHovered())
+            ui::SetTooltip("%s", GetRbScriptCompletionKindName(item.kind));
+        ui::PopID();
+    }
+    ui::EndChild();
+
+    if (!ranked.empty())
+    {
+        if (ui::IsKeyPressed(KEY_DOWN))
+            completionSelected_ = ea::min(completionSelected_ + 1u, static_cast<unsigned>(ranked.size() - 1));
+        else if (ui::IsKeyPressed(KEY_UP) && completionSelected_ > 0)
+            --completionSelected_;
+        else if (ui::IsKeyPressed(KEY_RETURN) && completionSelected_ < ranked.size())
+            InsertCompletion(document, ranked[completionSelected_].label.c_str());
     }
 }
 
@@ -876,28 +1080,11 @@ void RbScriptTab::RenderContent()
         return;
     }
 
-    const ea::string before = activeSource_;
-    const ImVec2 editorSize = ImVec2{0.0f, showPreview_ ? -210.0f : -150.0f};
-    ImFont* monoFont = Project::GetMonoFont();
-    if (monoFont)
-        ui::PushFont(monoFont);
-
-    const bool changed = ui::InputTextMultiline("##RbScriptSource", &activeSource_, editorSize,
-        ImGuiInputTextFlags_AllowTabInput | ImGuiInputTextFlags_CallbackAlways);
-    sourceFocused_ = ui::IsItemActive();
-    if (monoFont)
-        ui::PopFont();
-
-    if (changed)
-    {
-        document->source = activeSource_;
-        document->dirty = true;
-        RefreshDocument(GetActiveResourceName(), autoCompile_);
-        PushSourceEdit(before, activeSource_);
-    }
+    RenderInlineSourceEditor(*document);
 
     RenderFindReplace(*document);
     RenderOutline(*document);
+    RenderContextHelp(*document);
     RenderAutocomplete(*document);
     RenderTokenPreview(*document);
     RenderDiagnostics(*document);

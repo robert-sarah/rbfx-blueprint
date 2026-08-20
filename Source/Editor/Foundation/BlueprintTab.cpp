@@ -3,6 +3,7 @@
 
 #include "BlueprintTab.h"
 
+#include "../Core/EditorTheme.h"
 #include "../Core/IniHelpers.h"
 
 #include <Urho3D/Core/StringUtils.h>
@@ -98,19 +99,19 @@ void DrawCableArrow(ImDrawList* drawList, const ea::vector<ImVec2>& route, ImU32
 ImU32 PinColor(BlueprintDataType type, bool execution)
 {
     if (execution)
-        return IM_COL32(245, 205, 80, 255);
+        return EditorThemeColors::Execution;
     switch (type)
     {
-    case BlueprintDataType::Bool: return IM_COL32(90, 205, 120, 255);
+    case BlueprintDataType::Bool: return EditorThemeColors::Boolean;
     case BlueprintDataType::Int:
     case BlueprintDataType::Int64:
     case BlueprintDataType::Float:
-    case BlueprintDataType::Double: return IM_COL32(90, 165, 240, 255);
-    case BlueprintDataType::String: return IM_COL32(230, 150, 90, 255);
+    case BlueprintDataType::Double: return EditorThemeColors::Numeric;
+    case BlueprintDataType::String: return EditorThemeColors::String;
     case BlueprintDataType::Vector2:
     case BlueprintDataType::Vector3:
-    case BlueprintDataType::Vector4: return IM_COL32(180, 110, 230, 255);
-    default: return IM_COL32(185, 185, 195, 255);
+    case BlueprintDataType::Vector4: return EditorThemeColors::Vector;
+    default: return EditorThemeColors::DefaultData;
     }
 }
 
@@ -226,7 +227,8 @@ BlueprintPin* BlueprintTab::FindPinAt(const Vector2& graphPosition, BlueprintNod
             const float pinX = IsOutputPin(pin.kind) ? NodeWidth : 0.0f;
             const float dx = graphPosition.x_ - (candidate->position.x_ + pinX);
             const float dy = graphPosition.y_ - (candidate->position.y_ + GetPinY(*candidate, i));
-            if (dx * dx + dy * dy <= 12.0f * 12.0f)
+            const float hitRadius = 12.0f / Max(zoom_, 0.001f);
+            if (dx * dx + dy * dy <= hitRadius * hitRadius)
             {
                 node = candidate;
                 return &candidate->pins[i];
@@ -614,14 +616,14 @@ void BlueprintTab::RenderGraphCanvas()
     ImDrawList* drawList = ui::GetWindowDrawList();
     const ImVec2 canvasEnd = canvasOrigin + canvasSize;
 
-    drawList->AddRectFilled(canvasOrigin, canvasEnd, IM_COL32(23, 26, 31, 255));
+    drawList->AddRectFilled(canvasOrigin, canvasEnd, EditorThemeColors::Background);
     const float grid = 32.0f * zoom_;
     const float startX = fmodf(pan_.x_, grid);
     const float startY = fmodf(pan_.y_, grid);
     for (float x = startX; x < canvasSize.x; x += grid)
-        drawList->AddLine(canvasOrigin + ImVec2{x, 0}, canvasOrigin + ImVec2{x, canvasSize.y}, IM_COL32(38, 43, 51, 255));
+        drawList->AddLine(canvasOrigin + ImVec2{x, 0}, canvasOrigin + ImVec2{x, canvasSize.y}, EditorThemeColors::Grid);
     for (float y = startY; y < canvasSize.y; y += grid)
-        drawList->AddLine(canvasOrigin + ImVec2{0, y}, canvasOrigin + ImVec2{canvasSize.x, y}, IM_COL32(38, 43, 51, 255));
+        drawList->AddLine(canvasOrigin + ImVec2{0, y}, canvasOrigin + ImVec2{canvasSize.x, y}, EditorThemeColors::Grid);
 
     // Open popups from the stable canvas window scope on the following frame.
     // Opening directly while the InvisibleButton is processing the right click can
@@ -809,7 +811,7 @@ void BlueprintTab::RenderLinks(const ImVec2& canvasOrigin, ImDrawList* drawList)
         BuildOrthogonalCableRoute(fromPosition, toPosition, true, zoom_, laneOffset, route);
         if (route.size() >= 2)
         {
-            drawList->AddPolyline(route.data(), static_cast<int>(route.size()), IM_COL32(0, 0, 0, 125),
+            drawList->AddPolyline(route.data(), static_cast<int>(route.size()), EditorThemeColors::CableShadow,
                 ImDrawFlags_None, Max(6.0f * zoom_, 2.0f));
             drawList->AddPolyline(route.data(), static_cast<int>(route.size()), color,
                 ImDrawFlags_None, Max(2.5f * zoom_, 1.0f));
@@ -844,9 +846,9 @@ void BlueprintTab::RenderLinkPreview(const ImVec2& canvasOrigin, ImDrawList* dra
     BuildOrthogonalCableRoute(start, end, linkingFromOutput_, zoom_, 0.0f, route);
     if (route.size() >= 2)
     {
-        drawList->AddPolyline(route.data(), static_cast<int>(route.size()), IM_COL32(0, 0, 0, 110),
+        drawList->AddPolyline(route.data(), static_cast<int>(route.size()), EditorThemeColors::CableShadow,
             ImDrawFlags_None, Max(4.0f * zoom_, 2.0f));
-        drawList->AddPolyline(route.data(), static_cast<int>(route.size()), IM_COL32(245, 205, 80, 220),
+        drawList->AddPolyline(route.data(), static_cast<int>(route.size()), EditorThemeColors::LinkPreview,
             ImDrawFlags_None, Max(2.0f * zoom_, 1.0f));
     }
 }
@@ -856,7 +858,7 @@ void BlueprintTab::RenderSelectionOverlay(const ImVec2& canvasOrigin, ImDrawList
     const ImGuiIO& io = ui::GetIO();
     if (linkingNode_ == BLUEPRINT_INVALID_ID || !ui::IsMouseDown(MOUSEB_LEFT))
         return;
-    drawList->AddCircle(io.MousePos, 7.0f, IM_COL32(245, 205, 80, 255), 16, 1.5f);
+    drawList->AddCircle(io.MousePos, 7.0f, EditorThemeColors::Execution, 16, 1.5f);
 }
 
 void BlueprintTab::RenderCanvasContextMenu()
@@ -989,24 +991,24 @@ void BlueprintTab::RenderNode(const BlueprintNode& node, const ImVec2& canvasOri
     const ImVec2 bottomRight = topLeft + ImVec2{NodeWidth * zoom_, GetNodeHeight(node) * zoom_};
     const bool selected = IsSelected(node.id) || node.id == selectedNode_;
     const bool debugCurrent = node.id == debugCurrentNode_ && runtime_.IsDebugActive();
-    const ImU32 bodyColor = debugCurrent ? IM_COL32(115, 78, 35, 255)
-        : selected ? IM_COL32(55, 75, 105, 255) : IM_COL32(43, 48, 57, 255);
-    const ImU32 headerColor = selected ? IM_COL32(70, 110, 165, 255) : IM_COL32(55, 61, 72, 255);
+    const ImU32 bodyColor = debugCurrent ? EditorThemeColors::Debug
+        : selected ? EditorThemeColors::AccentMuted : EditorThemeColors::PanelAlt;
+    const ImU32 headerColor = selected ? EditorThemeColors::AccentMuted : EditorThemeColors::BorderMuted;
     drawList->AddRectFilled(topLeft, bottomRight, bodyColor, 6.0f);
     drawList->AddRectFilled(topLeft, topLeft + ImVec2{NodeWidth * zoom_, HeaderHeight * zoom_}, headerColor, 6.0f,
         ImDrawFlags_RoundCornersTop);
-    drawList->AddRect(topLeft, bottomRight, IM_COL32(110, 120, 135, 255), 6.0f, 0, 1.0f);
+    drawList->AddRect(topLeft, bottomRight, EditorThemeColors::Border, 6.0f, 0, EditorThemeColors::BorderWidth);
     if (NodeMatchesSearch(node))
         drawList->AddRect(topLeft - ImVec2{2.0f, 2.0f}, bottomRight + ImVec2{2.0f, 2.0f},
-            IM_COL32(255, 205, 70, 255), 7.0f, 0, 2.5f);
+            EditorThemeColors::Search, 7.0f, 0, 2.5f);
 
-    drawList->AddText(topLeft + ImVec2{10.0f, 8.0f} * zoom_, IM_COL32(245, 245, 250, 255), node.title.c_str());
+    drawList->AddText(topLeft + ImVec2{10.0f, 8.0f} * zoom_, EditorThemeColors::TextPrimary, node.title.c_str());
     if (IsSelected(node.id))
-        drawList->AddCircleFilled(topLeft + ImVec2{NodeWidth * zoom_ - 12.0f, 16.0f * zoom_}, 4.0f * zoom_, IM_COL32(100, 210, 255, 255));
+        drawList->AddCircleFilled(topLeft + ImVec2{NodeWidth * zoom_ - 12.0f, 16.0f * zoom_}, 4.0f * zoom_, EditorThemeColors::AccentHighlight);
     for (const BlueprintId breakpoint : breakpoints_)
     {
         if (breakpoint == node.id)
-            drawList->AddCircleFilled(topLeft + ImVec2{NodeWidth * zoom_ - 26.0f, 16.0f * zoom_}, 4.0f * zoom_, IM_COL32(235, 70, 65, 255));
+            drawList->AddCircleFilled(topLeft + ImVec2{NodeWidth * zoom_ - 26.0f, 16.0f * zoom_}, 4.0f * zoom_, EditorThemeColors::Error);
     }
     for (unsigned i = 0; i < node.pins.size(); ++i)
     {
@@ -1019,7 +1021,7 @@ void BlueprintTab::RenderNode(const BlueprintNode& node, const ImVec2& canvasOri
         const ImVec2 textPosition = position + ImVec2{output ? -8.0f : 8.0f, -7.0f} * zoom_;
         const ImVec2 textSize = ui::CalcTextSize(pin.displayName.c_str()) * zoom_;
         drawList->AddText(output ? textPosition - ImVec2{textSize.x, 0} : textPosition,
-            IM_COL32(225, 228, 235, 255), pin.displayName.c_str());
+            EditorThemeColors::TextPrimary, pin.displayName.c_str());
         if (showPinValues_)
         {
             const Variant value = runtime_.GetValue(node.id, pin.name);
@@ -1029,7 +1031,7 @@ void BlueprintTab::RenderNode(const BlueprintNode& node, const ImVec2& canvasOri
                 drawList->AddText(output ? topLeft + ImVec2{NodeWidth * zoom_ - 10.0f, (GetPinY(node, i) + 7.0f) * zoom_}
                                          - ImVec2{ui::CalcTextSize(valueText.c_str()).x * zoom_, 0}
                                          : topLeft + ImVec2{10.0f, (GetPinY(node, i) + 7.0f) * zoom_},
-                    IM_COL32(170, 220, 175, 255), valueText.c_str());
+                    EditorThemeColors::PinValue, valueText.c_str());
             }
         }
     }
@@ -1338,8 +1340,8 @@ void BlueprintTab::RenderComments(const ImVec2& canvasOrigin, ImDrawList* drawLi
         const ImVec2 size{comment.size.x_ * zoom_, comment.size.y_ * zoom_};
         const ImVec2 bottomRight = topLeft + size;
         drawList->AddRectFilled(topLeft, bottomRight, comment.color, 6.0f);
-        drawList->AddRect(topLeft, bottomRight, IM_COL32(190, 190, 205, 180), 6.0f, 0, 1.0f);
-        drawList->AddText(topLeft + ImVec2{8.0f, 6.0f} * zoom_, IM_COL32(245, 245, 250, 255), comment.text.c_str());
+        drawList->AddRect(topLeft, bottomRight, EditorThemeColors::CommentBorder, 6.0f, 0, EditorThemeColors::BorderWidth);
+        drawList->AddText(topLeft + ImVec2{8.0f, 6.0f} * zoom_, EditorThemeColors::TextPrimary, comment.text.c_str());
     }
 }
 
@@ -1349,8 +1351,8 @@ void BlueprintTab::RenderMinimap(const ImVec2& canvasOrigin, const ImVec2& canva
     const ImVec2 topLeft = canvasOrigin + canvasSize - minimapSize - ImVec2{14.0f, 14.0f};
     const ImVec2 bottomRight = topLeft + minimapSize;
     ImDrawList* drawList = ui::GetWindowDrawList();
-    drawList->AddRectFilled(topLeft, bottomRight, IM_COL32(18, 20, 24, 230), 4.0f);
-    drawList->AddRect(topLeft, bottomRight, IM_COL32(105, 115, 130, 220), 4.0f);
+    drawList->AddRectFilled(topLeft, bottomRight, EditorThemeColors::MinimapBackground, 4.0f);
+    drawList->AddRect(topLeft, bottomRight, EditorThemeColors::MinimapBorder, 4.0f);
 
     if (graph_.GetNodes().empty())
         return;
@@ -1372,7 +1374,7 @@ void BlueprintTab::RenderMinimap(const ImVec2& canvasOrigin, const ImVec2& canva
             8.0f + (node.position.y_ - minimum.y_) * scale};
         const ImVec2 nodeSize{Max(5.0f, NodeWidth * scale), Max(4.0f, GetNodeHeight(node) * scale)};
         const ImU32 color = node.id == debugCurrentNode_ ? IM_COL32(245, 175, 60, 255)
-            : node.id == selectedNode_ ? IM_COL32(90, 155, 235, 255) : IM_COL32(100, 105, 120, 255);
+            : node.id == selectedNode_ ? EditorThemeColors::Accent : EditorThemeColors::MinimapNode;
         drawList->AddRectFilled(nodeTopLeft, nodeTopLeft + nodeSize, color, 2.0f);
     }
 }

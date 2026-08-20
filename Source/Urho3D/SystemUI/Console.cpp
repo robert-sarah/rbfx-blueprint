@@ -39,6 +39,8 @@
 
 #include <EASTL/sort.h>
 
+#include <algorithm>
+
 #include "../DebugNew.h"
 
 namespace Urho3D
@@ -90,6 +92,7 @@ void Console::SetNumHistoryRows(unsigned rows)
     historyRows_ = rows;
     if (history_.size() > rows)
         history_.resize(rows);
+    RebuildLevelCounts();
 }
 
 void Console::SetConsoleHeight(unsigned height)
@@ -140,19 +143,63 @@ void Console::HandleLogMessage(StringHash eventType, VariantMap& eventData)
     const ea::string& logger = eventData[P_LOGGER].GetString();
     const ea::string& message = eventData[P_MESSAGE].GetString();
 
-    // The message may be multi-line, so split to rows in that case
+    // The message may be multi-line, so split to rows in that case.
     ea::vector<ea::string> rows = message.split('\n');
     for (const auto& row : rows)
     {
         ea::string formattedMessage = Format("[{}] [{}] [{}] : {}", Time::GetTimeStamp(timestamp, "%H:%M:%S"),
             debugLevelAbbreviations[level], logger, row);
-        history_.push_back(LogEntry{level, timestamp, logger, formattedMessage});
+        AppendLogEntry(LogEntry{level, timestamp, logger, formattedMessage});
     }
     if (isAtEnd_)
         ScrollToEnd();
 
     if (autoVisibleOnError_ && level == LOG_ERROR && !IsVisible())
         SetVisible(true);
+}
+
+void Console::AppendLogEntry(LogEntry entry)
+{
+    if (entry.level_ < LOG_TRACE || entry.level_ >= LOG_NONE)
+        return;
+
+    if (groupRepeats_ && !history_.empty())
+    {
+        LogEntry& previous = history_.back();
+        if (previous.level_ == entry.level_ && previous.logger_ == entry.logger_ && previous.message_ == entry.message_)
+        {
+            ++previous.repeatCount_;
+            ++levelCounts_[entry.level_];
+            return;
+        }
+    }
+
+    if (history_.full())
+        RemoveLogEntry(history_.front());
+
+    history_.push_back(entry);
+    ++levelCounts_[entry.level_];
+}
+
+void Console::RemoveLogEntry(const LogEntry& entry)
+{
+    if (entry.level_ < LOG_TRACE || entry.level_ >= LOG_NONE)
+        return;
+
+    const unsigned count = entry.repeatCount_;
+    levelCounts_[entry.level_] = levelCounts_[entry.level_] > count
+        ? levelCounts_[entry.level_] - count
+        : 0;
+}
+
+void Console::RebuildLevelCounts()
+{
+    std::fill(std::begin(levelCounts_), std::end(levelCounts_), 0);
+    for (const LogEntry& entry : history_)
+    {
+        if (entry.level_ >= LOG_TRACE && entry.level_ < LOG_NONE)
+            levelCounts_[entry.level_] += entry.repeatCount_;
+    }
 }
 
 void Console::RenderContent()
@@ -178,7 +225,10 @@ void Console::RenderContent()
         int textStart = 0;
         for (const auto& row : history_)
         {
-            int textEnd = textStart + (int) row.message_.length();
+            const ea::string displayMessage = groupRepeats_ && row.repeatCount_ > 1
+                ? Format("{} (x{})", row.message_, row.repeatCount_)
+                : row.message_;
+            int textEnd = textStart + (int) displayMessage.length();
 
             if (!levelVisible_[row.level_])
             {
@@ -192,8 +242,8 @@ void Console::RenderContent()
                 continue;
             }
 
-            const char* rowStart = row.message_.c_str();
-            const char* rowEnd = row.message_.c_str() + row.message_.length();
+            const char* rowStart = displayMessage.c_str();
+            const char* rowEnd = displayMessage.c_str() + displayMessage.length();
 
             ImVec2 rowSize = ui::CalcTextSize(rowStart, rowEnd);
             ImVec2 rowStartPos = ui::GetCursorScreenPos();
@@ -259,9 +309,9 @@ void Console::RenderContent()
             // Find URIs, render underlines and send click events
             if (isRowHovered)
             {
-                for (unsigned i = 0; i < row.message_.length();)
+                for (unsigned i = 0; i < displayMessage.length();)
                 {
-                    unsigned uriPos = row.message_.find("://", i);
+                    unsigned uriPos = displayMessage.find("://", i);
                     if (uriPos == ea::string::npos)
                         break;
 
@@ -395,6 +445,7 @@ void Console::RenderUi(StringHash eventType, VariantMap& eventData)
 void Console::Clear()
 {
     history_.clear();
+    std::fill(std::begin(levelCounts_), std::end(levelCounts_), 0);
 }
 
 void Console::SetCommandInterpreter(const ea::string& interpreter)

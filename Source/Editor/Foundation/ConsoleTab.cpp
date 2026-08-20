@@ -36,6 +36,17 @@ void ConsoleTab::RenderContent()
     ImFont* font = Project::GetMonoFont();
     if (font)
         ui::PushFont(font);
+
+    ui::Text("Trace: %u | Debug: %u | Info: %u | Warning: %u | Error: %u",
+        console->GetLevelCount(LOG_TRACE), console->GetLevelCount(LOG_DEBUG),
+        console->GetLevelCount(LOG_INFO), console->GetLevelCount(LOG_WARNING),
+        console->GetLevelCount(LOG_ERROR));
+    ui::SameLine();
+    bool groupRepeats = console->IsGroupRepeats();
+    if (ui::Checkbox("Group repeats", &groupRepeats))
+        console->SetGroupRepeats(groupRepeats);
+    ui::Separator();
+
     console->RenderContent();
     if (font)
         ui::PopFont();
@@ -74,6 +85,7 @@ void ConsoleTab::WriteIniSettings(ImGuiTextBuffer& output)
     {
         for (const LogLevel level : logLevels)
             WriteIntToIni(output, Format("Show_{}", logLevelNames[level]), console->GetLevelVisible(level));
+        WriteIntToIni(output, "GroupRepeats", console->IsGroupRepeats());
     }
 }
 
@@ -88,6 +100,8 @@ void ConsoleTab::ReadIniSettings(const char* line)
             if (const auto value = ReadIntFromIni(line, Format("Show_{}", logLevelNames[level])))
                 console->SetLevelVisible(level, !!*value);
         }
+        if (const auto value = ReadIntFromIni(line, "GroupRepeats"))
+            console->SetGroupRepeats(!!*value);
     }
 }
 

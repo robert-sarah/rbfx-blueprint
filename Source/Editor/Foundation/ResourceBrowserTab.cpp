@@ -30,6 +30,8 @@
 #include <EASTL/sort.h>
 #include <EASTL/tuple.h>
 
+#include <cstdlib>
+
 #include <IconFontCppHeaders/IconsFontAwesome6.h>
 
 namespace Urho3D
@@ -110,6 +112,9 @@ ResourceBrowserTab::ResourceBrowserTab(Context* context)
     auto project = GetProject();
     project->OnInitialized.Subscribe(this, &ResourceBrowserTab::RefreshContents);
     project->OnRequest.SubscribeWithSender(this, &ResourceBrowserTab::OnProjectRequest);
+
+    navigationHistory_.push_back(EntryReference{left_.selectedRoot_, left_.selectedPath_});
+    navigationCursor_ = 0;
 }
 
 void ResourceBrowserTab::InitializeRoots()
@@ -293,6 +298,71 @@ void ResourceBrowserTab::OpenSelected()
         OpenEntryInEditor(*entry);
 }
 
+bool ResourceBrowserTab::NavigateBack()
+{
+    if (navigationCursor_ <= 0 || navigationHistory_.empty())
+        return false;
+
+    --navigationCursor_;
+    RestoreNavigation(navigationHistory_[navigationCursor_]);
+    return true;
+}
+
+bool ResourceBrowserTab::NavigateForward()
+{
+    if (navigationCursor_ < 0 || navigationCursor_ + 1 >= static_cast<int>(navigationHistory_.size()))
+        return false;
+
+    ++navigationCursor_;
+    RestoreNavigation(navigationHistory_[navigationCursor_]);
+    return true;
+}
+
+bool ResourceBrowserTab::IsCurrentFolderFavorite() const
+{
+    const EntryReference current{left_.selectedRoot_, left_.selectedPath_};
+    return ea::find(favoriteFolders_.begin(), favoriteFolders_.end(), current) != favoriteFolders_.end();
+}
+
+bool ResourceBrowserTab::ToggleFavoriteCurrentFolder()
+{
+    const EntryReference current{left_.selectedRoot_, left_.selectedPath_};
+    const auto iter = ea::find(favoriteFolders_.begin(), favoriteFolders_.end(), current);
+    if (iter != favoriteFolders_.end())
+    {
+        favoriteFolders_.erase(iter);
+        return false;
+    }
+
+    favoriteFolders_.push_back(current);
+    return true;
+}
+
+void ResourceBrowserTab::RecordNavigation(const EntryReference& reference)
+{
+    if (restoringNavigation_)
+        return;
+
+    if (navigationCursor_ >= 0 && navigationCursor_ < static_cast<int>(navigationHistory_.size())
+        && navigationHistory_[navigationCursor_] == reference)
+    {
+        return;
+    }
+
+    if (navigationCursor_ + 1 < static_cast<int>(navigationHistory_.size()))
+        navigationHistory_.erase(navigationHistory_.begin() + navigationCursor_ + 1, navigationHistory_.end());
+
+    navigationHistory_.push_back(reference);
+    navigationCursor_ = static_cast<int>(navigationHistory_.size()) - 1;
+}
+
+void ResourceBrowserTab::RestoreNavigation(const EntryReference& reference)
+{
+    restoringNavigation_ = true;
+    SelectLeftPanel(reference.resourcePath_, reference.rootIndex_);
+    restoringNavigation_ = false;
+}
+
 void ResourceBrowserTab::WriteIniSettings(ImGuiTextBuffer& output)
 {
     BaseClassName::WriteIniSettings(output);
@@ -304,6 +374,17 @@ void ResourceBrowserTab::WriteIniSettings(ImGuiTextBuffer& output)
     WriteStringToIni(output, "SearchQuery", searchQuery_);
     WriteStringToIni(output, "LastSelectedRightPath", right_.lastSelectedPath_);
     WriteStringToIni(output, "SelectedRightPaths", ea::string::joined(selectedRightPaths, ";"));
+
+    StringVector history;
+    for (const EntryReference& ref : navigationHistory_)
+        history.push_back(Format("{}|{}", ref.rootIndex_, ref.resourcePath_));
+    WriteStringToIni(output, "NavigationHistory", ea::string::joined(history, ";"));
+    WriteIntToIni(output, "NavigationCursor", navigationCursor_);
+
+    StringVector favorites;
+    for (const EntryReference& ref : favoriteFolders_)
+        favorites.push_back(Format("{}|{}", ref.rootIndex_, ref.resourcePath_));
+    WriteStringToIni(output, "FavoriteFolders", ea::string::joined(favorites, ";"));
 }
 
 void ResourceBrowserTab::ReadIniSettings(const char* line)
@@ -328,6 +409,35 @@ void ResourceBrowserTab::ReadIniSettings(const char* line)
         right_.selectedPaths_ = {selectedPaths.begin(), selectedPaths.end()};
         OnSelectionChanged();
     }
+
+    auto parseReferences = [](const ea::string& serialized)
+    {
+        ea::vector<EntryReference> references;
+        for (const ea::string& item : serialized.split(';'))
+        {
+            const ea::vector<ea::string> parts = item.split('|');
+            if (parts.empty() || parts[0].empty())
+                continue;
+            const unsigned root = static_cast<unsigned>(std::strtoul(parts[0].c_str(), nullptr, 10));
+            const ea::string path = parts.size() > 1 ? parts[1] : ea::string{};
+            references.push_back(EntryReference{root, path});
+        }
+        return references;
+    };
+
+    if (const auto value = ReadStringFromIni(line, "NavigationHistory"))
+        navigationHistory_ = parseReferences(*value);
+    if (const auto value = ReadIntFromIni(line, "NavigationCursor"))
+        navigationCursor_ = *value;
+    if (const auto value = ReadStringFromIni(line, "FavoriteFolders"))
+        favoriteFolders_ = parseReferences(*value);
+
+    if (navigationHistory_.empty())
+    {
+        navigationHistory_.push_back(EntryReference{left_.selectedRoot_, left_.selectedPath_});
+        navigationCursor_ = 0;
+    }
+    navigationCursor_ = Clamp(navigationCursor_, 0, static_cast<int>(navigationHistory_.size()) - 1);
 }
 
 void ResourceBrowserTab::ScrollToSelection()
@@ -336,9 +446,74 @@ void ResourceBrowserTab::ScrollToSelection()
     right_.scrollToSelection_ = true;
 }
 
+void ResourceBrowserTab::RenderNavigationBar()
+{
+    ui::BeginDisabled(navigationCursor_ <= 0);
+    if (ui::SmallButton(ICON_FA_ARROW_LEFT "##ResourceBack"))
+        NavigateBack();
+    ui::EndDisabled();
+    ui::SameLine();
+    ui::BeginDisabled(navigationCursor_ < 0 || navigationCursor_ + 1 >= static_cast<int>(navigationHistory_.size()));
+    if (ui::SmallButton(ICON_FA_ARROW_RIGHT "##ResourceForward"))
+        NavigateForward();
+    ui::EndDisabled();
+    ui::SameLine();
+
+    const char* favoriteLabel = IsCurrentFolderFavorite()
+        ? ICON_FA_STAR " Unfavorite"
+        : ICON_FA_STAR " Favorite";
+    if (ui::SmallButton(favoriteLabel))
+        ToggleFavoriteCurrentFolder();
+    ui::SameLine();
+
+    const ResourceRoot& root = roots_[left_.selectedRoot_];
+    const ea::string currentLabel = left_.selectedPath_.empty()
+        ? root.name_
+        : Format("{} / {}", root.name_, left_.selectedPath_);
+    if (ui::BeginCombo("##ResourceFavorites", currentLabel.c_str()))
+    {
+        for (unsigned i = 0; i < favoriteFolders_.size(); ++i)
+        {
+            const EntryReference& favorite = favoriteFolders_[i];
+            if (favorite.rootIndex_ >= roots_.size())
+                continue;
+            const ea::string label = favorite.resourcePath_.empty()
+                ? roots_[favorite.rootIndex_].name_
+                : Format("{} / {}", roots_[favorite.rootIndex_].name_, favorite.resourcePath_);
+            ui::PushID(static_cast<int>(i));
+            if (ui::Selectable(label.c_str(), favorite == EntryReference{left_.selectedRoot_, left_.selectedPath_}))
+                SelectLeftPanel(favorite.resourcePath_, favorite.rootIndex_);
+            ui::PopID();
+        }
+        ui::EndCombo();
+    }
+}
+
+void ResourceBrowserTab::RenderBreadcrumbs()
+{
+    const ResourceRoot& root = roots_[left_.selectedRoot_];
+    if (ui::SmallButton(root.name_.c_str()))
+        SelectLeftPanel("", left_.selectedRoot_);
+
+    ea::string accumulated;
+    for (const ea::string& part : left_.selectedPath_.split('/'))
+    {
+        if (part.empty())
+            continue;
+        ui::SameLine();
+        ui::TextUnformatted("/");
+        ui::SameLine();
+        accumulated = accumulated.empty() ? part : Format("{}/{}", accumulated, part);
+        if (ui::SmallButton(part.c_str()))
+            SelectLeftPanel(accumulated, left_.selectedRoot_);
+    }
+}
+
 void ResourceBrowserTab::RenderContent()
 {
     const Selection oldSelection = GetSelection();
+
+    RenderNavigationBar();
 
     for (ResourceRoot& root : roots_)
         root.reflection_->Update();
@@ -582,6 +757,7 @@ void ResourceBrowserTab::RenderDirectoryContent()
     ui::SameLine();
     ui::SetNextItemWidth(-1.0f);
     ui::InputText("##ResourceBrowserSearch", &searchQuery_);
+    RenderBreadcrumbs();
 
     if (!entry->resourceName_.empty())
         RenderDirectoryUp(*entry);
@@ -1160,6 +1336,8 @@ void ResourceBrowserTab::SelectLeftPanel(const ea::string& path, ea::optional<un
 
     left_.selectedPath_ = RemoveTrailingSlash(path);
     left_.selectedRoot_ = rootIndex.value_or(left_.selectedRoot_);
+
+    RecordNavigation(EntryReference{left_.selectedRoot_, left_.selectedPath_});
 
     right_.lastSelectedPath_ = "";
     right_.selectedPaths_ = {};

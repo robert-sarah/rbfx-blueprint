@@ -86,6 +86,8 @@ private:
     void RenderDiagnostics(const Document& document);
     void RenderDebugPanel(Document& document);
     void RenderTokenPreview(const Document& document);
+    void RenderInlineSourceEditor(Document& document);
+    void RenderContextHelp(const Document& document);
     void RenderAutocomplete(Document& document);
     void InsertCompletion(Document& document, const ea::string& completion);
     void RenderOutline(Document& document);
@@ -125,6 +127,9 @@ private:
     bool showPreview_{true};
     bool autoCompile_{true};
     bool sourceFocused_{false};
+    bool showCompletionPopup_{true};
+    bool showContextHelp_{true};
+    unsigned completionSelected_{};
     unsigned breakpointLine_{1};
     RbScriptTypeRegistry typeRegistry_;
 };
