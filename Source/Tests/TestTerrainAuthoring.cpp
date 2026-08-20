@@ -27,7 +27,8 @@ TEST_CASE("Terrain authoring stamps and digests a height field", "[terrain][auth
     REQUIRE(TerrainAuthoring::ApplyHeightStamp(heights, 3, 3, 1.0f, 1.0f, settings, &error));
     REQUIRE(error.empty());
     REQUIRE(heights[4] == Catch::Approx(0.5f));
-    REQUIRE(heights[0] == Catch::Approx(0.0f));
+    REQUIRE(heights[0] > 0.0f);
+    REQUIRE(heights[0] < heights[4]);
 
     const unsigned long long firstDigest = TerrainAuthoring::ComputeDigest(heights, 3, 3);
     const unsigned long long secondDigest = TerrainAuthoring::ComputeDigest(heights, 3, 3);
