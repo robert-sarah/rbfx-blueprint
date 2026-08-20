@@ -32,6 +32,18 @@ enum class PackageOptimization
     Shipping
 };
 
+/// Texture compression profiles supported by the deterministic package pipeline.
+enum class PackageTextureCompression
+{
+    None,
+    BC1,
+    BC3,
+    BC5,
+    BC7,
+    ASTC,
+    ETC2
+};
+
 struct URHO3D_API PackageAssetFilter
 {
     ea::string pattern;
@@ -54,6 +66,8 @@ struct URHO3D_API PackageBuildProfile
     ea::string buildGraphDigest;
     /// Digest of the asset-cache manifest used as package input.
     ea::string assetCacheDigest;
+    /// Texture compression profile required by the exported target.
+    PackageTextureCompression textureCompression{PackageTextureCompression::None};
     ea::vector<PackageAssetFilter> assetFilters;
 
     JSONValue ToJSON() const;
@@ -88,6 +102,8 @@ struct URHO3D_API PackageManifest
     ea::string buildGraphDigest;
     /// Digest of the asset-cache manifest used as package input.
     ea::string assetCacheDigest;
+    /// Texture compression profile resolved for this package target.
+    PackageTextureCompression textureCompression{PackageTextureCompression::None};
     /// Digest of the canonical manifest payload, computed after validation.
     ea::string provenanceDigest;
     ea::vector<PackageFileEntry> files;
@@ -111,6 +127,8 @@ public:
     static bool FromString(const ea::string& value, PackagePlatform& platform);
     static ea::string ToString(PackageOptimization optimization);
     static bool FromString(const ea::string& value, PackageOptimization& optimization);
+    static ea::string ToString(PackageTextureCompression compression);
+    static bool FromString(const ea::string& value, PackageTextureCompression& compression);
 
     static PackageValidationResult ValidateProfile(const PackageBuildProfile& profile);
     static PackageValidationResult ValidateManifest(const PackageManifest& manifest);

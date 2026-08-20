@@ -5,6 +5,7 @@
 //
 
 #include "PackageBuilder.h"
+#include "PlatformExportAdapter.h"
 
 #include "../Core/StringUtils.h"
 
@@ -88,6 +89,7 @@ JSONValue PackageBuildProfile::ToJSON() const
     root.Set("worldFabricDigest", Format("{}", worldFabricDigest));
     root.Set("buildGraphDigest", buildGraphDigest);
     root.Set("assetCacheDigest", assetCacheDigest);
+    root.Set("textureCompression", PackageBuilder::ToString(textureCompression));
 
     JSONValue filters(JSON_ARRAY);
     for (const PackageAssetFilter& filter : assetFilters)
@@ -117,6 +119,12 @@ bool PackageBuildProfile::FromJSON(const JSONValue& value, ea::string* error)
     parsed.reproducible = value.Contains("reproducible") ? value["reproducible"].GetBool(true) : true;
     parsed.buildGraphDigest = value.Contains("buildGraphDigest") ? value["buildGraphDigest"].GetString() : EMPTY_STRING;
     parsed.assetCacheDigest = value.Contains("assetCacheDigest") ? value["assetCacheDigest"].GetString() : EMPTY_STRING;
+    if (value.Contains("textureCompression")
+        && !PackageBuilder::FromString(value["textureCompression"].GetString(), parsed.textureCompression))
+    {
+        SetError(error, "Package build profile has an unsupported texture compression profile.");
+        return false;
+    }
     if (value.Contains("worldFabricDigest"))
     {
         if (value["worldFabricDigest"].IsString())
@@ -206,6 +214,7 @@ JSONValue PackageManifest::ToJSON() const
     root.Set("worldFabricDigest", Format("{}", worldFabricDigest));
     root.Set("buildGraphDigest", buildGraphDigest);
     root.Set("assetCacheDigest", assetCacheDigest);
+    root.Set("textureCompression", PackageBuilder::ToString(textureCompression));
     root.Set("provenanceDigest", provenanceDigest);
 
     ea::vector<PackageFileEntry> sortedFiles = files;
@@ -247,6 +256,12 @@ bool PackageManifest::FromJSON(const JSONValue& value, ea::string* error)
     parsed.architecture = value.Contains("architecture") ? value["architecture"].GetString() : EMPTY_STRING;
     parsed.buildGraphDigest = value.Contains("buildGraphDigest") ? value["buildGraphDigest"].GetString() : EMPTY_STRING;
     parsed.assetCacheDigest = value.Contains("assetCacheDigest") ? value["assetCacheDigest"].GetString() : EMPTY_STRING;
+    if (value.Contains("textureCompression")
+        && !PackageBuilder::FromString(value["textureCompression"].GetString(), parsed.textureCompression))
+    {
+        SetError(error, "Package manifest has an unsupported texture compression profile.");
+        return false;
+    }
     parsed.provenanceDigest = value.Contains("provenanceDigest") ? value["provenanceDigest"].GetString() : EMPTY_STRING;
     if (value.Contains("worldFabricDigest"))
     {
@@ -360,6 +375,34 @@ bool PackageBuilder::FromString(const ea::string& value, PackageOptimization& op
     return true;
 }
 
+ea::string PackageBuilder::ToString(PackageTextureCompression compression)
+{
+    switch (compression)
+    {
+    case PackageTextureCompression::None: return "None";
+    case PackageTextureCompression::BC1: return "BC1";
+    case PackageTextureCompression::BC3: return "BC3";
+    case PackageTextureCompression::BC5: return "BC5";
+    case PackageTextureCompression::BC7: return "BC7";
+    case PackageTextureCompression::ASTC: return "ASTC";
+    case PackageTextureCompression::ETC2: return "ETC2";
+    default: return "Unknown";
+    }
+}
+
+bool PackageBuilder::FromString(const ea::string& value, PackageTextureCompression& compression)
+{
+    if (value == "None") compression = PackageTextureCompression::None;
+    else if (value == "BC1") compression = PackageTextureCompression::BC1;
+    else if (value == "BC3") compression = PackageTextureCompression::BC3;
+    else if (value == "BC5") compression = PackageTextureCompression::BC5;
+    else if (value == "BC7") compression = PackageTextureCompression::BC7;
+    else if (value == "ASTC") compression = PackageTextureCompression::ASTC;
+    else if (value == "ETC2") compression = PackageTextureCompression::ETC2;
+    else return false;
+    return true;
+}
+
 PackageValidationResult PackageBuilder::ValidateProfile(const PackageBuildProfile& profile)
 {
     PackageValidationResult result;
@@ -383,6 +426,20 @@ PackageValidationResult PackageBuilder::ValidateProfile(const PackageBuildProfil
     {
         result.valid = false;
         result.errors.push_back("Package build profile outputPath must not be empty.");
+    }
+    if (const PlatformExportAdapter* adapter = PlatformExportAdapter::Find(profile.platform))
+    {
+        ea::string exportError;
+        if (!adapter->Validate(profile, &exportError))
+        {
+            result.valid = false;
+            result.errors.push_back(exportError);
+        }
+    }
+    else
+    {
+        result.valid = false;
+        result.errors.push_back("Package build profile platform has no export adapter.");
     }
     for (const PackageAssetFilter& filter : profile.assetFilters)
     {
@@ -467,6 +524,7 @@ unsigned long long PackageManifest::ComputeDigest() const
     mix(Format("{}", worldFabricDigest));
     mix(buildGraphDigest);
     mix(assetCacheDigest);
+    mix(PackageBuilder::ToString(textureCompression));
     for (const PackageFileEntry& file : sortedFiles)
     {
         mix(file.sourcePath);
@@ -497,6 +555,7 @@ bool PackageBuilder::BuildManifest(const PackageBuildProfile& profile, const ea:
     built.worldFabricDigest = profile.worldFabricDigest;
     built.buildGraphDigest = profile.buildGraphDigest;
     built.assetCacheDigest = profile.assetCacheDigest;
+    built.textureCompression = profile.textureCompression;
     for (const PackageFileEntry& candidate : candidates)
     {
         if (profile.IncludesAsset(candidate.sourcePath))

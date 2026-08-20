@@ -164,5 +164,5 @@ TEST_CASE("Platform export adapters describe supported targets", "[packaging][pl
     CHECK_FALSE(description.at("supportsThreads").GetBool());
     CHECK(description.at("architectures").GetString() == "wasm32");
 
-    CHECK(PlatformExportAdapter::Find(PackagePlatform::Android) == nullptr);
+    CHECK(PlatformExportAdapter::Find(PackagePlatform::Android) != nullptr);
 }

@@ -16,6 +16,7 @@ TEST_CASE("Package build profile round trip preserves platform and filters", "[p
     profile.optimization = PackageOptimization::Shipping;
     profile.outputPath = "dist/windows";
     profile.reproducible = true;
+    profile.textureCompression = PackageTextureCompression::BC7;
     profile.assetFilters.push_back({"*.rbscene", false});
     profile.assetFilters.push_back({"Generated/*", true});
 
@@ -30,9 +31,61 @@ TEST_CASE("Package build profile round trip preserves platform and filters", "[p
     CHECK(loaded.architecture == "x64");
     CHECK(loaded.optimization == PackageOptimization::Shipping);
     CHECK(loaded.outputPath == "dist/windows");
+    CHECK(loaded.textureCompression == PackageTextureCompression::BC7);
     CHECK(loaded.IncludesAsset("levels/main.rbscene"));
     CHECK_FALSE(loaded.IncludesAsset("Generated/main.rbscene"));
     CHECK_FALSE(loaded.IncludesAsset("textures/albedo.png"));
+}
+
+TEST_CASE("Native export matrix accepts supported architecture and compression pairs", "[packaging][platform]")
+{
+    struct TargetCase
+    {
+        PackagePlatform platform;
+        const char* architecture;
+        PackageTextureCompression compression;
+        bool valid;
+    };
+
+    const TargetCase cases[] = {
+        {PackagePlatform::Linux, "x64", PackageTextureCompression::BC7, true},
+        {PackagePlatform::Windows, "arm64", PackageTextureCompression::BC5, true},
+        {PackagePlatform::macOS, "universal", PackageTextureCompression::ASTC, true},
+        {PackagePlatform::Android, "arm64-v8a", PackageTextureCompression::ETC2, true},
+        {PackagePlatform::iOS, "arm64", PackageTextureCompression::ASTC, true},
+        {PackagePlatform::WebAssembly, "wasm32", PackageTextureCompression::BC7, true},
+        {PackagePlatform::WebAssembly, "x64", PackageTextureCompression::BC7, false},
+        {PackagePlatform::Windows, "x64", PackageTextureCompression::ASTC, false},
+        {PackagePlatform::Android, "x64", PackageTextureCompression::ETC2, false},
+        {PackagePlatform::iOS, "arm64", PackageTextureCompression::BC7, false},
+    };
+
+    for (const TargetCase& target : cases)
+    {
+        PackageBuildProfile profile;
+        profile.name = "TargetMatrix";
+        profile.platform = target.platform;
+        profile.architecture = target.architecture;
+        profile.textureCompression = target.compression;
+        const PackageValidationResult validation = PackageBuilder::ValidateProfile(profile);
+        CAPTURE(PackageBuilder::ToString(target.platform), target.architecture,
+            PackageBuilder::ToString(target.compression));
+        CHECK(validation.valid == target.valid);
+    }
+}
+
+TEST_CASE("Platform export adapters expose Android and iOS capabilities", "[packaging][platform]")
+{
+    bool supported = false;
+    const StringVariantMap android = PlatformExportAdapter::Describe(PackagePlatform::Android, &supported);
+    REQUIRE(supported);
+    CHECK(android.at("architectures").GetString().find("arm64-v8a") != ea::string::npos);
+    CHECK(android.at("textureCompressions").GetString().find("ASTC") != ea::string::npos);
+
+    const StringVariantMap ios = PlatformExportAdapter::Describe(PackagePlatform::iOS, &supported);
+    REQUIRE(supported);
+    CHECK(ios.at("architectures").GetString() == "arm64");
+    CHECK(ios.at("textureCompressions").GetString().find("ETC2") != ea::string::npos);
 }
 
 TEST_CASE("Package filters include all assets when no include rule exists", "[packaging][filters]")
@@ -138,6 +191,7 @@ TEST_CASE("Package manifest records recipe cache and artifact provenance", "[pac
     profile.architecture = "x64";
     profile.buildGraphDigest = "buildgraph-7f3a";
     profile.assetCacheDigest = "assetcache-19c2";
+    profile.textureCompression = PackageTextureCompression::BC7;
 
     PackageFileEntry mesh;
     mesh.sourcePath = "Models/arena.glb";
@@ -166,12 +220,14 @@ TEST_CASE("Package manifest records recipe cache and artifact provenance", "[pac
     CHECK(error.empty());
     CHECK(manifest.buildGraphDigest == profile.buildGraphDigest);
     CHECK(manifest.assetCacheDigest == profile.assetCacheDigest);
+    CHECK(manifest.textureCompression == profile.textureCompression);
     CHECK_FALSE(manifest.provenanceDigest.empty());
     CHECK(manifest.provenanceDigest == Format("{}", manifest.ComputeDigest()));
 
     const JSONValue json = manifest.ToJSON();
     CHECK(json["buildGraphDigest"].GetString() == "buildgraph-7f3a");
     CHECK(json["assetCacheDigest"].GetString() == "assetcache-19c2");
+    CHECK(json["textureCompression"].GetString() == "BC7");
     REQUIRE(json["files"].GetArray().size() == 2);
     CHECK(json["files"][0]["contentDigest"].GetString() == "sha256:arena");
     CHECK(json["files"][0]["importProfileDigest"].GetString() == "model-profile:competitive");

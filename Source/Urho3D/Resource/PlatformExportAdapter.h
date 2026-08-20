@@ -23,6 +23,7 @@ struct URHO3D_API PlatformExportCapabilities
     bool supportsAot{};
     bool supportsDynamicCode{};
     ea::vector<ea::string> architectures;
+    ea::vector<PackageTextureCompression> textureCompressions;
 };
 
 /// Platform-specific export contract used by packaging tools, CI and Blueprint.
