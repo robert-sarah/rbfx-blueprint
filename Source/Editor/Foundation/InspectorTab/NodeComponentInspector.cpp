@@ -25,7 +25,7 @@
 #include "../../Project/CreateComponentMenu.h"
 
 #include <Urho3D/Container/TransformedSpan.h>
-#include "../Foundation/InspectorTab.h"
+#include "../../Foundation/InspectorTab.h"
 
 #include "../../Core/EditorIcons.h"
 #include "../../Core/EditorTheme.h"
