@@ -59,7 +59,7 @@ void HierarchyBrowserTab::ApplyHotkeys(HotkeyManager* hotkeyManager)
 
 void HierarchyBrowserTab::RenderContent()
 {
-    EditorTheme::PushPanelColors();
+    EditorThemeUI::PushPanelColors();
     if (ui::CollapsingHeader(ICON_FA_SITEMAP " Scene Hierarchy", ImGuiTreeNodeFlags_DefaultOpen))
     {
         if (source_)
@@ -67,7 +67,7 @@ void HierarchyBrowserTab::RenderContent()
         else
             ui::TextColored(EditorThemeColors::ToColor(EditorThemeColors::TextMuted), "No hierarchy source connected");
     }
-    EditorTheme::PopPanelColors();
+    EditorThemeUI::PopPanelColors();
 }
 
 void HierarchyBrowserTab::RenderContextMenuItems()

@@ -203,7 +203,7 @@ void VFXGraphTab::TogglePreview()
 
 void VFXGraphTab::RenderToolbar()
 {
-    EditorTheme::PushToolbarColors();
+    EditorThemeUI::PushToolbarColors();
     if (ui::Button(EditorIcons::ValidateLabel))
         ValidateGraph();
     ui::SameLine();
@@ -218,7 +218,7 @@ void VFXGraphTab::RenderToolbar()
     ui::SameLine();
     if (ui::Button(EditorIcons::ResetLabel))
         ResetDemoGraph();
-    EditorTheme::PopToolbarColors();
+    EditorThemeUI::PopToolbarColors();
     ui::SameLine();
     ui::TextColored(EditorThemeColors::ToColor(EditorThemeColors::TextMuted), "%s", status_.c_str());
 }
@@ -258,7 +258,7 @@ void VFXGraphTab::RenderNodeList(VFXGraph& graph)
     ui::SetNextItemWidth(-1.0f);
     if (ui::Combo("##VFXGraphNodeType", &nodeType, nodeTypes, IM_ARRAYSIZE(nodeTypes)))
         newNodeType_ = static_cast<unsigned>(nodeType);
-    EditorTheme::PushToolbarColors(true);
+    EditorThemeUI::PushToolbarColors(true);
     if (ui::Button(EditorIcons::AddLabel, ImVec2(-1.0f, 0.0f)))
     {
         const JSONValue before = CaptureGraph();
@@ -269,7 +269,7 @@ void VFXGraphTab::RenderNodeList(VFXGraph& graph)
         selectedNodeId_ = id;
         CommitGraphEdit(before, "Added VFX graph node");
     }
-    EditorTheme::PopToolbarColors();
+    EditorThemeUI::PopToolbarColors();
 }
 
 void VFXGraphTab::RenderNodeInspector(VFXGraph& graph)
@@ -293,7 +293,7 @@ void VFXGraphTab::RenderNodeInspector(VFXGraph& graph)
     if (before != CaptureGraph())
         CommitGraphEdit(before, "Edited VFX graph node");
 
-    EditorTheme::PushToolbarColors();
+    EditorThemeUI::PushToolbarColors();
     if (node->type != VFXNodeType::Output && ui::Button(ICON_FA_BULLSEYE " Set Selected as Output"))
     {
         const JSONValue outputBefore = CaptureGraph();
@@ -311,7 +311,7 @@ void VFXGraphTab::RenderNodeInspector(VFXGraph& graph)
             CommitGraphEdit(removeBefore, "Removed VFX graph node");
         }
     }
-    EditorTheme::PopToolbarColors();
+    EditorThemeUI::PopToolbarColors();
 }
 
 void VFXGraphTab::RenderSimulationControls(VFXGraph& graph)
@@ -399,9 +399,9 @@ void VFXGraphTab::RenderContent()
 
     if (!validationError_.empty())
     {
-        EditorTheme::PushDiagnosticText(true);
+        EditorThemeUI::PushDiagnosticText(true);
         ui::Text("Error: %s", validationError_.c_str());
-        EditorTheme::PopDiagnosticText();
+        EditorThemeUI::PopDiagnosticText();
     }
 }
 

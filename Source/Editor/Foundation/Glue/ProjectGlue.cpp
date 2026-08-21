@@ -21,6 +21,8 @@
 //
 
 #include "../../Foundation/Glue/ProjectGlue.h"
+#include "../../Core/EditorIcons.h"
+#include "../../Core/EditorTheme.h"
 
 #include <Urho3D/Engine/Engine.h>
 #include <Urho3D/Engine/EngineDefs.h>
@@ -180,12 +182,29 @@ void Foundation_ProjectGlue(Context* context, Project* project)
             ui::EndDisabled();
         }
 
+        Widgets::ToolbarSeparator();
+        EditorThemeUI::PushToolbarColors(isPlaying);
+
+        ui::BeginDisabled(isPlaying);
+        if (Widgets::ToolbarButton(EditorIcons::Run, "Play"))
+            state->TogglePlayedDefault();
+        ui::EndDisabled();
+
+        const bool isPaused = state->gameViewTab_ && state->gameViewTab_->IsPaused();
+        ui::BeginDisabled(!isPlaying);
+        if (Widgets::ToolbarButton(isPaused ? EditorIcons::Run : EditorIcons::Pause,
+                isPaused ? "Resume" : "Pause", isPaused))
         {
-            const char* title = isPlaying ? ICON_FA_STOP : ICON_FA_PLAY;
-            const char* tooltip = isPlaying ? "Stop" : "Launch";
-            if (Widgets::ToolbarButton(title, tooltip))
-                state->TogglePlayedDefault();
+            if (isPaused)
+                state->gameViewTab_->Resume();
+            else
+                state->gameViewTab_->Pause();
         }
+        if (Widgets::ToolbarButton(EditorIcons::Stop, "Stop"))
+            state->TogglePlayedDefault();
+        ui::EndDisabled();
+
+        EditorThemeUI::PopToolbarColors();
     });
 }
 

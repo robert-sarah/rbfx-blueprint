@@ -36,6 +36,14 @@ The visual consistency pass adds `EditorIcons.h` as a central action-label dicti
 
 `InspectorTab` now exposes a real global property filter and forwards it to active inspector sources. `SerializableInspectorWidget` and `NodeComponentInspector` relay that filter to the component/property renderer, while active inspector groups are collapsible. `HierarchyBrowserTab` now provides a themed collapsible hierarchy section and retains the provider’s existing search, component visibility and temporary-node controls.
 
+The editor shell now follows a modern IDE organization without copying Godot branding. `Project::RenderWorkspaceToolbar` renders the ordered workspace presets as clickable icon-and-label tabs with an active accent state, covering Layout, 2D, 3D, Blueprint, Scripting, Animation, Rendering, Audio, Profiling, World Fabric and Build. The reusable `Widgets::ToolbarTabButton` primitive keeps the tab sizing, active styling and tooltip behavior in one SystemUI contract.
+
+The project toolbar now exposes distinct Play, Pause/Resume and Stop controls. `GameViewTab::PlayState` implements pause as a real runtime state transition: it releases editor input and forces the next engine timestep to zero while preserving the running plugin, scene and resources; Resume restores input and normal update progression, while Stop keeps the existing teardown semantics. The shared transport controls remain disabled or enabled according to the actual runtime state instead of disappearing.
+
+When no project is open, the former 3×3 tile grid is replaced by a structured project manager. It provides explicit New Project and Open Project actions, a persistent search field, and a filtered recent-project list using the real project paths collected by the application. The shell also reserves a non-docking bottom status strip displaying `rbfx-blueprint 0.7.0-production`; the existing Console and Resource Browser bottom placements remain unchanged so saved dock layouts continue to work.
+
+The editor build completed successfully after resolving the `EditorTheme` enum/helper namespace collision and the unavailable Font Awesome animation glyph. Validation completed with **418/418 editor tests passing in 251.07 seconds** and **415/415 standard tests passing in 248.61 seconds**.
+
 ## Boundaries
 
 The implementation does not copy Godot branding, source code, exact colors or class names. It does not claim a full IDE-grade text editor: the underlying ImGui input widget remains the reliable editing surface, while the completion and syntax assistance are integrated around it. Native graphical certification on Windows and macOS remains a separate release gate from Linux compilation and CTest evidence. Features from the briefs that require production backends not present in this repository, such as a full LSP transport, real-time multi-user merge service, or platform-specific native GUI certification, remain documented as future work rather than simulated.

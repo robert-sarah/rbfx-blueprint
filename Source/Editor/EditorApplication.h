@@ -65,6 +65,8 @@ protected:
     /// Persistent state
     /// @{
     StringVector recentProjects_;
+    /// Filter text used by the structured project manager welcome page.
+    ea::string projectSearch_;
     /// @}
 
     /// Editor plugins.

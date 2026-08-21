@@ -212,7 +212,7 @@ void SequencerTab::Seek(float time)
 void SequencerTab::RenderToolbar()
 {
     Sequencer& sequencer = GetSequencer();
-    EditorTheme::PushToolbarColors();
+    EditorThemeUI::PushToolbarColors();
     if (ui::Button(EditorIcons::ValidateLabel))
         ValidateSequence();
     ui::SameLine();
@@ -228,7 +228,7 @@ void SequencerTab::RenderToolbar()
     ui::SameLine();
     if (ui::Button(EditorIcons::ResetLabel))
         ResetDemoSequence();
-    EditorTheme::PopToolbarColors();
+    EditorThemeUI::PopToolbarColors();
     ui::SameLine();
     ui::TextColored(EditorThemeColors::ToColor(EditorThemeColors::TextMuted), "%s", status_.c_str());
 }

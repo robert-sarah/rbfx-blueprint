@@ -164,6 +164,28 @@ bool ToolbarButton(const char* label, const char* tooltip, bool active)
     return result;
 }
 
+bool ToolbarTabButton(const char* label, const char* tooltip, bool active)
+{
+    const auto& g = *ui::GetCurrentContext();
+    const float height = GetSmallButtonSize();
+    const ImVec2 textSize = ui::CalcTextSize(label);
+    const ImVec2 size{textSize.x + g.Style.FramePadding.x * 2.0f, height};
+
+    const ColorScopeGuard guardColor{ImGuiCol_Button, g.Style.Colors[ImGuiCol_ButtonActive], active};
+    const ColorScopeGuard guardHovered{ImGuiCol_ButtonHovered, g.Style.Colors[ImGuiCol_HeaderHovered], active};
+    ui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{g.Style.FramePadding.x, 0.0f});
+
+    const bool result = ui::ButtonEx(label, size, ImGuiButtonFlags_PressedOnClick);
+
+    ui::PopStyleVar();
+    ui::SameLine(0, 0);
+
+    if (ui::IsItemHovered() && tooltip)
+        ui::SetTooltip("%s", tooltip);
+
+    return result;
+}
+
 void ToolbarSeparator()
 {
     ImGuiContext& g = *GImGui;

@@ -24,6 +24,7 @@
 
 #include "../Core/IniHelpers.h"
 
+#include <Urho3D/Core/CoreEvents.h>
 #include <Urho3D/Core/WorkQueue.h>
 #include <Urho3D/Engine/Engine.h>
 #include <Urho3D/Engine/EngineDefs.h>
@@ -98,6 +99,15 @@ public:
         pluginManager_->StartApplication();
         UpdatePreferredMouseSetup();
 
+        // A paused play state keeps rendering the last frame while forcing the
+        // following engine timestep to zero. This preserves the runtime process
+        // and resources, unlike Stop(), which tears the application down.
+        SubscribeToEvent(E_UPDATE, [this](StringHash, VariantMap&)
+        {
+            if (paused_)
+                engine_->SetNextTimeStep(0.0f);
+        });
+
         SubscribeToEvent(E_BEGINRENDERING, [this]
         {
             auto renderDevice = GetSubsystem<RenderDevice>();
@@ -149,6 +159,23 @@ public:
     }
 
     bool IsInputGrabbed() const { return inputGrabbed_; }
+    bool IsPaused() const { return paused_; }
+
+    void Pause()
+    {
+        if (paused_)
+            return;
+        ReleaseInput();
+        paused_ = true;
+    }
+
+    void Resume()
+    {
+        if (!paused_)
+            return;
+        paused_ = false;
+        GrabInput();
+    }
 
     ~PlayState()
     {
@@ -213,6 +240,7 @@ private:
     WeakPtr<RenderSurface> backbufferSurface_;
 
     bool inputGrabbed_{};
+    bool paused_{};
 
     bool preferredMouseVisible_{true};
     MouseMode preferredMouseMode_{MM_FREE};
@@ -240,6 +268,23 @@ GameViewTab::~GameViewTab()
 bool GameViewTab::IsInputGrabbed() const
 {
     return state_ && state_->IsInputGrabbed();
+}
+
+bool GameViewTab::IsPaused() const
+{
+    return state_ && state_->IsPaused();
+}
+
+void GameViewTab::Pause()
+{
+    if (state_)
+        state_->Pause();
+}
+
+void GameViewTab::Resume()
+{
+    if (state_)
+        state_->Resume();
 }
 
 void GameViewTab::Play()

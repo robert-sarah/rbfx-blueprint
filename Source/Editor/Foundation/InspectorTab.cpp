@@ -67,7 +67,7 @@ void InspectorTab::ApplyHotkeys(HotkeyManager* hotkeyManager)
 
 void InspectorTab::RenderContent()
 {
-    EditorTheme::PushPanelColors();
+    EditorThemeUI::PushPanelColors();
     ui::TextUnformatted(EditorIcons::Search);
     ui::SameLine();
     ui::SetNextItemWidth(-1.0f);
@@ -86,7 +86,7 @@ void InspectorTab::RenderContent()
     {
         ui::TextColored(EditorThemeColors::ToColor(EditorThemeColors::TextMuted), "No inspectable object selected");
     }
-    EditorTheme::PopPanelColors();
+    EditorThemeUI::PopPanelColors();
 }
 
 void InspectorTab::RenderContextMenuItems()

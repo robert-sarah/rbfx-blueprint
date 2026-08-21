@@ -47,11 +47,14 @@ public:
 
     void Play();
     bool IsPlaying() const { return !!state_; }
+    bool IsPaused() const;
     bool IsInputGrabbed() const;
 
     /// Commands
     /// @{
     void Stop();
+    void Pause();
+    void Resume();
     void TogglePlayed();
     void ReleaseInput();
     /// @}

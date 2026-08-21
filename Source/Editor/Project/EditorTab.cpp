@@ -142,9 +142,9 @@ void EditorTab::RenderWindow()
         }
     }
 
-    EditorTheme::PushPanelColors();
+    EditorThemeUI::PushPanelColors();
     RenderContent();
-    EditorTheme::PopPanelColors();
+    EditorThemeUI::PopPanelColors();
 
     if (noContentPadding)
         ui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});

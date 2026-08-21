@@ -24,6 +24,7 @@
 
 #include "../Assets/ModelImporter.h"
 #include "../Core/EditorDesignSystem.h"
+#include "../Core/EditorIcons.h"
 #include "../Core/EditorAutosave.h"
 #include "../Core/EditorPluginManager.h"
 #include "../Foundation/CommandPaletteTab.h"
@@ -1218,20 +1219,32 @@ void Project::RenderSavePendingToolbar()
 void Project::RenderWorkspaceToolbar()
 {
     Widgets::ToolbarSeparator();
-    ui::SetNextItemWidth(150.0f);
-    if (ui::BeginCombo("##ActiveWorkspace", GetEditorWorkspaceName(activeWorkspace_)))
+
+    const auto getIcon = [](EditorWorkspace workspace) -> const char*
     {
-        for (const EditorWorkspacePreset& preset : GetEditorWorkspacePresets())
+        switch (workspace)
         {
-            const bool selected = activeWorkspace_ == preset.id_;
-            if (ui::Selectable(preset.name_, selected))
-                SetWorkspace(preset.id_);
-            if (selected)
-                ui::SetItemDefaultFocus();
-            if (ui::IsItemHovered())
-                ui::SetTooltip("%s", preset.description_);
+        case EditorWorkspace::Layout: return EditorIcons::Layout;
+        case EditorWorkspace::Scene2D: return EditorIcons::Scene2D;
+        case EditorWorkspace::Scene3D: return EditorIcons::Scene3D;
+        case EditorWorkspace::Blueprint: return EditorIcons::Graph;
+        case EditorWorkspace::Scripting: return EditorIcons::Code;
+        case EditorWorkspace::Animation: return EditorIcons::Animation;
+        case EditorWorkspace::Rendering: return EditorIcons::Rendering;
+        case EditorWorkspace::Audio: return EditorIcons::Audio;
+        case EditorWorkspace::Profiling: return EditorIcons::Profiling;
+        case EditorWorkspace::WorldFabric: return EditorIcons::WorldFabric;
+        case EditorWorkspace::Build: return EditorIcons::Build;
+        default: return EditorIcons::Layout;
         }
-        ui::EndCombo();
+    };
+
+    for (const EditorWorkspacePreset& preset : GetEditorWorkspacePresets())
+    {
+        const bool active = activeWorkspace_ == preset.id_;
+        const ea::string label = Format("{} {}", getIcon(preset.id_), preset.name_);
+        if (Widgets::ToolbarTabButton(label.c_str(), preset.description_, active))
+            SetWorkspace(preset.id_);
     }
 }
 

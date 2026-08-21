@@ -313,7 +313,7 @@ void NodeComponentInspector::SetFilter(const ea::string& filter)
 
 void NodeComponentInspector::RenderContent()
 {
-    EditorTheme::PushPanelColors();
+    EditorThemeUI::PushPanelColors();
     if (nodeWidget_)
     {
         if (ui::CollapsingHeader(ICON_FA_CUBES " Selection", ImGuiTreeNodeFlags_DefaultOpen))
@@ -338,7 +338,7 @@ void NodeComponentInspector::RenderContent()
     }
     else if (ui::CollapsingHeader(ICON_FA_LIST " Component Summary", ImGuiTreeNodeFlags_DefaultOpen))
         RenderComponentSummary();
-    EditorTheme::PopPanelColors();
+    EditorThemeUI::PopPanelColors();
 }
 
 void NodeComponentInspector::RenderComponentSummary()
@@ -363,7 +363,7 @@ void NodeComponentInspector::RenderComponentSummary()
 
 void NodeComponentInspector::RenderAddComponent()
 {
-    EditorTheme::PushToolbarColors(true);
+    EditorThemeUI::PushToolbarColors(true);
     if (ui::Button(EditorIcons::AddComponentLabel))
         ui::OpenPopup("##AddComponent");
     if (ui::BeginPopup("##AddComponent"))
@@ -375,7 +375,7 @@ void NodeComponentInspector::RenderAddComponent()
         }
         ui::EndPopup();
     }
-    EditorTheme::PopToolbarColors();
+    EditorThemeUI::PopToolbarColors();
 }
 
 void NodeComponentInspector::RenderContextMenuItems()

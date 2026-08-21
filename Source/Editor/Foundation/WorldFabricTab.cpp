@@ -269,7 +269,7 @@ void WorldFabricTab::RemoveSelectedDependency()
 
 void WorldFabricTab::RenderToolbar()
 {
-    EditorTheme::PushToolbarColors();
+    EditorThemeUI::PushToolbarColors();
     if (ui::Button(EditorIcons::ResetLabel))
         ResetTemplate();
     ui::SameLine();
@@ -278,7 +278,7 @@ void WorldFabricTab::RenderToolbar()
     ui::SameLine();
     if (ui::Button(ICON_FA_DIAGRAM_PROJECT " Validate Graph"))
         ValidateGraph();
-    EditorTheme::PopToolbarColors();
+    EditorThemeUI::PopToolbarColors();
     ui::SameLine();
     ui::TextColored(EditorThemeColors::ToColor(EditorThemeColors::TextMuted), "%s", status_.c_str());
 }
@@ -319,13 +319,13 @@ void WorldFabricTab::RenderNodes(WorldFabricGraphResource& resource)
     int nodeKind = static_cast<int>(newNodeKind_);
     ui::Combo("New node kind", &nodeKind, nodeKinds, IM_ARRAYSIZE(nodeKinds));
     newNodeKind_ = static_cast<unsigned>(nodeKind);
-    EditorTheme::PushToolbarColors(true);
+    EditorThemeUI::PushToolbarColors(true);
     if (ui::Button(EditorIcons::AddLabel))
         AddNode();
     ui::SameLine();
     if (ui::Button(EditorIcons::RemoveLabel))
         RemoveSelectedNode();
-    EditorTheme::PopToolbarColors();
+    EditorThemeUI::PopToolbarColors();
 }
 
 void WorldFabricTab::RenderNodeInspector(WorldFabricGraphResource& resource)

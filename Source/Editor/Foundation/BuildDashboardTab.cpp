@@ -247,13 +247,13 @@ void BuildDashboardTab::ValidateGraph()
 
 void BuildDashboardTab::RenderToolbar()
 {
-    EditorTheme::PushToolbarColors();
+    EditorThemeUI::PushToolbarColors();
     if (ui::Button(EditorIcons::ResetLabel))
         ResetTemplate();
     ui::SameLine();
     if (ui::Button(ICON_FA_DIAGRAM_PROJECT " Validate Graph"))
         ValidateGraph();
-    EditorTheme::PopToolbarColors();
+    EditorThemeUI::PopToolbarColors();
     ui::SameLine();
     ui::TextColored(EditorThemeColors::ToColor(EditorThemeColors::TextMuted), "%s", status_.c_str());
 }
@@ -293,13 +293,13 @@ void BuildDashboardTab::RenderTasks(BuildDashboardResource& dashboard)
     int taskKind = static_cast<int>(newTaskKind_);
     ui::Combo("New task kind", &taskKind, taskKinds, IM_ARRAYSIZE(taskKinds));
     newTaskKind_ = static_cast<unsigned>(taskKind);
-    EditorTheme::PushToolbarColors(true);
+    EditorThemeUI::PushToolbarColors(true);
     if (ui::Button(ICON_FA_PLUS " Add Task"))
         AddTask();
     ui::SameLine();
     if (ui::Button(EditorIcons::RemoveLabel))
         RemoveSelectedTask();
-    EditorTheme::PopToolbarColors();
+    EditorThemeUI::PopToolbarColors();
 }
 
 void BuildDashboardTab::RenderTaskInspector(BuildDashboardResource& dashboard)
@@ -326,7 +326,7 @@ void BuildDashboardTab::RenderTaskInspector(BuildDashboardResource& dashboard)
     for (const ea::string& dependency : task->dependencies)
         ui::BulletText("%s", dependency.c_str());
     ui::InputText("Dependency key", &dependencyInput_);
-    EditorTheme::PushToolbarColors();
+    EditorThemeUI::PushToolbarColors();
     if (ui::Button(ICON_FA_LINK " Add Dependency") && !dependencyInput_.empty())
     {
         const JSONValue dependencyBefore = CaptureDashboard();
@@ -341,7 +341,7 @@ void BuildDashboardTab::RenderTaskInspector(BuildDashboardResource& dashboard)
             CommitDashboardEdit(dependencyBefore, Format("Added dependency to {}", task->key));
         }
     }
-    EditorTheme::PopToolbarColors();
+    EditorThemeUI::PopToolbarColors();
 
     ui::Separator();
     ui::Text("Metadata: %u entries", task->metadata.size());
@@ -356,9 +356,9 @@ void BuildDashboardTab::RenderBuildOrder(const BuildDashboardResource& dashboard
     ui::Text("Deterministic Build Order");
     if (!error.empty())
     {
-        EditorTheme::PushDiagnosticText(true);
+        EditorThemeUI::PushDiagnosticText(true);
         ui::Text("%s", error.c_str());
-        EditorTheme::PopDiagnosticText();
+        EditorThemeUI::PopDiagnosticText();
         return;
     }
     for (unsigned index = 0; index < order.size(); ++index)
@@ -388,9 +388,9 @@ void BuildDashboardTab::RenderContent()
     RenderBuildOrder(dashboard);
     if (!validationError_.empty())
     {
-        EditorTheme::PushDiagnosticText(true);
+        EditorThemeUI::PushDiagnosticText(true);
         ui::Text("Error: %s", validationError_.c_str());
-        EditorTheme::PopDiagnosticText();
+        EditorThemeUI::PopDiagnosticText();
     }
 }
 

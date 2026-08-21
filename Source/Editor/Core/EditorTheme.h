@@ -63,7 +63,7 @@ inline ImVec4 ToColor(ImU32 color)
 
 } // namespace Urho3D::EditorThemeColors
 
-namespace Urho3D::EditorTheme
+namespace Urho3D::EditorThemeUI
 {
 
 inline void PushPanelColors()
@@ -101,4 +101,4 @@ inline void PopDiagnosticText()
     ImGui::PopStyleColor();
 }
 
-} // namespace Urho3D::EditorTheme
+} // namespace Urho3D::EditorThemeUI

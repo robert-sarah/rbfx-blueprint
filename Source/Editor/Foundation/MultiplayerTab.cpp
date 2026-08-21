@@ -148,7 +148,7 @@ void MultiplayerTab::ApplyToLiveNetwork()
 
 void MultiplayerTab::RenderToolbar()
 {
-    EditorTheme::PushToolbarColors();
+    EditorThemeUI::PushToolbarColors();
     if (ui::Button(EditorIcons::ResetLabel))
         ResetTemplate();
     ui::SameLine();
@@ -157,7 +157,7 @@ void MultiplayerTab::RenderToolbar()
     ui::SameLine();
     if (ui::Button(ICON_FA_NETWORK_WIRED " Apply Network Tuning"))
         ApplyToLiveNetwork();
-    EditorTheme::PopToolbarColors();
+    EditorThemeUI::PopToolbarColors();
     ui::SameLine();
     ui::TextColored(EditorThemeColors::ToColor(EditorThemeColors::TextMuted), "%s", status_.c_str());
 }
@@ -305,9 +305,9 @@ void MultiplayerTab::RenderLiveDiagnostics()
         ui::TextWrapped("%s", debugInfo.c_str());
     if (!liveError_.empty())
     {
-        EditorTheme::PushDiagnosticText(true);
+        EditorThemeUI::PushDiagnosticText(true);
         ui::Text("Apply error: %s", liveError_.c_str());
-        EditorTheme::PopDiagnosticText();
+        EditorThemeUI::PopDiagnosticText();
     }
 }
 
@@ -329,9 +329,9 @@ void MultiplayerTab::RenderContent()
 
     if (!validationError_.empty())
     {
-        EditorTheme::PushDiagnosticText(true);
+        EditorThemeUI::PushDiagnosticText(true);
         ui::Text("Validation error: %s", validationError_.c_str());
-        EditorTheme::PopDiagnosticText();
+        EditorThemeUI::PopDiagnosticText();
     }
 }
 

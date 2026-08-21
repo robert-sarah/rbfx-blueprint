@@ -62,6 +62,8 @@
 #include "Foundation/StandardFileTypes.h"
 #include "Foundation/Texture2DViewTab.h"
 #include "Foundation/TextureCubeViewTab.h"
+#include "Core/EditorIcons.h"
+#include "Core/EditorTheme.h"
 
 #include <Urho3D/Core/CommandLine.h>
 #include <Urho3D/Core/Context.h>
@@ -381,12 +383,13 @@ void EditorApplication::Render()
         ? toolbarButtonHeight + (2 * toolbarWindowPadding)
         : 0.0f;
     const float toolbarEffectiveHeight = toolbarHeight + 1;
+    const float statusBarHeight = 24.0f;
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_MenuBar;
     flags |= ImGuiWindowFlags_NoDocking;
     ImGuiViewport* viewport = ui::GetMainViewport();
     ui::SetNextWindowPos(viewport->Pos + ImVec2(0, toolbarEffectiveHeight));
-    ui::SetNextWindowSize(viewport->Size - ImVec2(0, toolbarEffectiveHeight));
+    ui::SetNextWindowSize(viewport->Size - ImVec2(0, toolbarEffectiveHeight + statusBarHeight));
     ui::SetNextWindowViewport(viewport->ID);
     ui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     flags |= ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove;
@@ -404,52 +407,87 @@ void EditorApplication::Render()
     }
     else
     {
-        // Render start page
-        auto& style = ui::GetStyle();
-        auto* lists = ui::GetWindowDrawList();
-        ImRect rect{ui::GetWindowContentRegionMin(), ui::GetWindowContentRegionMax()};
+        // Structured project manager welcome page. It deliberately uses the same
+        // panels and actions as the in-project editor instead of a decorative tile grid.
+        const ImVec2 available = ui::GetContentRegionAvail();
+        const float margin = 24.0f;
+        ui::SetCursorPos(ImVec2{margin, margin});
+        EditorThemeUI::PushPanelColors();
+        ui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{8.0f, 8.0f});
 
-        ImVec2 tileSize{200, 200};
-        ui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{10, 10});
-
-        ui::SetCursorPos(rect.GetCenter() - ImVec2{tileSize.x * 1.5f + 10, tileSize.y * 1.5f + 10});
-
-        ui::BeginGroup();
-
-        int index = 0;
-        for (int row = 0; row < 3; row++)
+        if (ui::BeginChild("WelcomeProjectManager", available - ImVec2{margin * 2.0f, margin * 2.0f}, false))
         {
-            for (int col = 0; col < 3; col++, index++)
-            {
-                // Last tile never shows a project.
-                if (recentProjects_.size() <= index || (row == 2 && col == 2))
-                {
-                    if (ui::Button("Open/Create Project", tileSize))
-                        OpenOrCreateProject();
-                }
-                else
-                {
-                    const ea::string& projectPath = recentProjects_[index];
-                    if (Texture2D* previewTexture = GetProjectPreview(projectPath))
-                    {
-                        if (Widgets::ImageButton(previewTexture, tileSize - style.ItemInnerSpacing * 2))
-                            OpenProject(projectPath);
-                    }
-                    else
-                    {
-                        if (ui::Button(recentProjects_[index].c_str(), tileSize))
-                            OpenProject(projectPath);
-                    }
-                    if (ui::IsItemHovered())
-                        ui::SetTooltip("%s", projectPath.c_str());
-                }
-                ui::SameLine();
-            }
-            ui::NewLine();
-        }
+            ui::Text("rbfx-blueprint");
+            ui::SameLine();
+            ui::TextDisabled("Production editor");
+            ui::TextDisabled("Create, open, import and resume a project");
+            ui::Separator();
 
-        ui::EndGroup();
+            const float actionWidth = 260.0f;
+            if (ui::BeginChild("WelcomeActions", ImVec2{actionWidth, 0.0f}, true))
+            {
+                ui::Text("Project");
+                ui::TextDisabled("Start a new workspace or open an existing one.");
+                ui::Spacing();
+
+                const ea::string newProjectLabel = Format("{} New Project", EditorIcons::Add);
+                const ea::string openProjectLabel = Format("{} Open Project", EditorIcons::FolderOpen);
+                const ea::string importProjectLabel = Format("{} Import Project", EditorIcons::Package);
+                EditorThemeUI::PushToolbarColors(true);
+                if (ui::Button(newProjectLabel.c_str(), ImVec2{-1.0f, 0.0f}))
+                    OpenOrCreateProject();
+                if (ui::Button(openProjectLabel.c_str(), ImVec2{-1.0f, 0.0f}))
+                    OpenOrCreateProject();
+                if (ui::Button(importProjectLabel.c_str(), ImVec2{-1.0f, 0.0f}))
+                    OpenOrCreateProject();
+                EditorThemeUI::PopToolbarColors();
+
+                ui::Separator();
+                ui::Text("Workspace");
+                ui::BulletText("2D and 3D scene editing");
+                ui::BulletText("Blueprint and rbscript tooling");
+                ui::BulletText("Production multiplayer workspaces");
+            }
+            ui::EndChild();
+
+            ui::SameLine();
+            if (ui::BeginChild("WelcomeRecentProjects", ImVec2{0.0f, 0.0f}, true))
+            {
+                ui::Text("Recent Projects");
+                ui::SameLine();
+                ui::TextDisabled("%u available", recentProjects_.size());
+                ui::SetNextItemWidth(-1.0f);
+                const ea::string searchLabel = Format("{} Search projects", EditorIcons::Search);
+                ui::InputText(searchLabel.c_str(), &projectSearch_);
+                ui::Separator();
+
+                bool displayedProject = false;
+                for (const ea::string& projectPath : recentProjects_)
+                {
+                    const ea::string projectName = GetFileNameAndExtension(RemoveTrailingSlash(projectPath));
+                    if (!projectSearch_.empty() && projectName.find(projectSearch_) == ea::string::npos
+                        && projectPath.find(projectSearch_) == ea::string::npos)
+                        continue;
+
+                    displayedProject = true;
+                    ui::PushID(projectPath.c_str());
+                    const ea::string projectLabel = Format("{} {}", EditorIcons::FolderOpen, projectName);
+                    if (ui::Button(projectLabel.c_str(), ImVec2{-1.0f, 0.0f}))
+                        OpenProject(projectPath);
+                    ui::TextDisabled("%s", projectPath.c_str());
+                    ui::Separator();
+                    ui::PopID();
+                }
+
+                if (!displayedProject)
+                    ui::TextDisabled(projectSearch_.empty() ? "No recent projects yet." : "No matching projects.");
+            }
+            ui::EndChild();
+        }
+        ui::EndChild();
+
         ui::PopStyleVar();
+        EditorThemeUI::PopPanelColors();
     }
 
     const float menuBarHeight = ui::GetCurrentWindow()->MenuBarHeight;
@@ -477,6 +515,23 @@ void EditorApplication::Render()
         ui::End();
         ui::PopStyleVar(3);
     }
+
+    // Keep the product identity visible without consuming dock space.
+    ui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + viewport->Size.y - statusBarHeight));
+    ui::SetNextWindowSize(ImVec2(viewport->Size.x, statusBarHeight));
+    ui::SetNextWindowViewport(viewport->ID);
+    const ImGuiWindowFlags statusBarFlags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoDecoration
+        | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus;
+    ui::PushStyleColor(ImGuiCol_WindowBg, EditorThemeColors::ToColor(EditorThemeColors::Panel));
+    ui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{8.0f, 3.0f});
+    ui::Begin("StatusBar", nullptr, statusBarFlags);
+    const char* versionLabel = ICON_FA_CIRCLE "  rbfx-blueprint 0.7.0-production";
+    const float versionWidth = ui::CalcTextSize(versionLabel).x;
+    ui::SetCursorPosX(ui::GetWindowWidth() - versionWidth - ui::GetStyle().WindowPadding.x);
+    ui::TextColored(EditorThemeColors::ToColor(EditorThemeColors::TextMuted), "%s", versionLabel);
+    ui::End();
+    ui::PopStyleVar();
+    ui::PopStyleColor();
 
     // Dialog for a warning when application is being closed with unsaved resources.
     if (exiting_)

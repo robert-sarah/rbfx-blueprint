@@ -38,6 +38,8 @@ namespace Widgets
 URHO3D_API float GetSmallButtonSize();
 /// Render toolbar button with optional tooltip. May be toggled on.
 URHO3D_API bool ToolbarButton(const char* label, const char* tooltip = nullptr, bool active = false);
+/// Render a workspace-style toolbar tab with an icon and text label.
+URHO3D_API bool ToolbarTabButton(const char* label, const char* tooltip = nullptr, bool active = false);
 /// Render a bit of space in toolbar between buttons.
 URHO3D_API void ToolbarSeparator();
 /// Render a label for next item. Label may be on the left or on the right, depending on flags.

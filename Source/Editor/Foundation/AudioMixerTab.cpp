@@ -182,7 +182,7 @@ void AudioMixerTab::ResetDemoMixer()
 
 void AudioMixerTab::RenderToolbar()
 {
-    EditorTheme::PushToolbarColors();
+    EditorThemeUI::PushToolbarColors();
     if (ui::Button(EditorIcons::ResetLabel))
         ResetDemoMixer();
     ui::SameLine();
@@ -194,7 +194,7 @@ void AudioMixerTab::RenderToolbar()
         else
             status_ = "Audio mixer is valid";
     }
-    EditorTheme::PopToolbarColors();
+    EditorThemeUI::PopToolbarColors();
     ui::SameLine();
     ui::TextColored(EditorThemeColors::ToColor(EditorThemeColors::TextMuted), "%s", status_.c_str());
 }
@@ -231,7 +231,7 @@ void AudioMixerTab::RenderBuses(AudioMixer& mixer)
         ui::EndTable();
     }
 
-    EditorTheme::PushToolbarColors(true);
+    EditorThemeUI::PushToolbarColors(true);
     if (ui::Button(ICON_FA_DIAGRAM_PROJECT " Add Bus"))
     {
         const JSONValue before = CaptureMixer();
@@ -242,7 +242,7 @@ void AudioMixerTab::RenderBuses(AudioMixer& mixer)
             CommitMixerEdit(before, Format("Added bus {}", name));
         }
     }
-    EditorTheme::PopToolbarColors();
+    EditorThemeUI::PopToolbarColors();
 }
 
 void AudioMixerTab::RenderBusInspector(AudioMixer& mixer)
@@ -270,14 +270,14 @@ void AudioMixerTab::RenderBusInspector(AudioMixer& mixer)
     int effectType = static_cast<int>(newEffectType_);
     ui::Combo("##AudioMixerEffectType", &effectType, effectTypes, IM_ARRAYSIZE(effectTypes));
     newEffectType_ = static_cast<unsigned>(effectType);
-    EditorTheme::PushToolbarColors();
+    EditorThemeUI::PushToolbarColors();
     if (ui::Button(ICON_FA_WAND_MAGIC_SPARKLES " Add Effect"))
     {
         const JSONValue effectBefore = CaptureMixer();
         if (mixer.AddEffect(bus->name, {static_cast<AudioDspType>(newEffectType_), true, 1.0f, 0.0f, 0.0f}))
             CommitMixerEdit(effectBefore, Format("Added {} effect", GetDspTypeName(static_cast<AudioDspType>(newEffectType_))));
     }
-    EditorTheme::PopToolbarColors();
+    EditorThemeUI::PopToolbarColors();
     for (unsigned index = 0; index < bus->effects.size(); ++index)
     {
         const AudioDspEffect& effect = bus->effects[index];
@@ -315,7 +315,7 @@ void AudioMixerTab::RenderVoices(const AudioMixer& mixer)
         ui::EndTable();
     }
 
-    EditorTheme::PushToolbarColors(true);
+    EditorThemeUI::PushToolbarColors(true);
     if (ui::Button(ICON_FA_VOLUME_HIGH " Add Preview Voice"))
     {
         AudioMixer& mutableMixer = const_cast<AudioMixer&>(mixer);
@@ -328,7 +328,7 @@ void AudioMixerTab::RenderVoices(const AudioMixer& mixer)
         }
     }
 
-    EditorTheme::PopToolbarColors();
+    EditorThemeUI::PopToolbarColors();
     if (AudioVoice* voice = const_cast<AudioMixer&>(mixer).GetVoice(selectedVoice_))
     {
         const JSONValue before = CaptureMixer();
@@ -371,9 +371,9 @@ void AudioMixerTab::RenderContent()
     RenderMeters(mixer);
     if (!validationError_.empty())
     {
-        EditorTheme::PushDiagnosticText(true);
+        EditorThemeUI::PushDiagnosticText(true);
         ui::Text("Error: %s", validationError_.c_str());
-        EditorTheme::PopDiagnosticText();
+        EditorThemeUI::PopDiagnosticText();
     }
 }
 

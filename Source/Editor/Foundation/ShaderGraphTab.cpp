@@ -205,7 +205,7 @@ void ShaderGraphTab::GenerateShader(ShaderGraphLanguage language)
 
 void ShaderGraphTab::RenderToolbar()
 {
-    EditorTheme::PushToolbarColors();
+    EditorThemeUI::PushToolbarColors();
     if (ui::Button(ICON_FA_CIRCLE_CHECK " Validate"))
         ValidateGraph();
     ui::SameLine();
@@ -217,7 +217,7 @@ void ShaderGraphTab::RenderToolbar()
     ui::SameLine();
     if (ui::Button(EditorIcons::ResetLabel))
         ResetDemoGraph();
-    EditorTheme::PopToolbarColors();
+    EditorThemeUI::PopToolbarColors();
     ui::SameLine();
     ui::TextColored(EditorThemeColors::ToColor(EditorThemeColors::TextMuted), "%s", status_.c_str());
 }
@@ -258,7 +258,7 @@ void ShaderGraphTab::RenderNodeList(ShaderGraph& graph)
     ui::SetNextItemWidth(-1.0f);
     if (ui::Combo("##ShaderGraphValueType", &valueType, valueTypes, IM_ARRAYSIZE(valueTypes)))
         newNodeType_ = static_cast<unsigned>(valueType);
-    EditorTheme::PushToolbarColors(true);
+    EditorThemeUI::PushToolbarColors(true);
     if (ui::Button(EditorIcons::AddLabel, ImVec2(-1.0f, 0.0f)))
     {
         const JSONValue before = CaptureGraph();
@@ -270,7 +270,7 @@ void ShaderGraphTab::RenderNodeList(ShaderGraph& graph)
         selectedNodeId_ = id;
         CommitGraphEdit(before, "Added shader graph node");
     }
-    EditorTheme::PopToolbarColors();
+    EditorThemeUI::PopToolbarColors();
 }
 
 void ShaderGraphTab::RenderNodeInspector(ShaderGraph& graph)
@@ -291,7 +291,7 @@ void ShaderGraphTab::RenderNodeInspector(ShaderGraph& graph)
     if (before != CaptureGraph())
         CommitGraphEdit(before, "Renamed shader graph node");
 
-    EditorTheme::PushToolbarColors();
+    EditorThemeUI::PushToolbarColors();
     if (ui::Button(EditorIcons::RemoveLabel))
     {
         const JSONValue removeBefore = CaptureGraph();
@@ -309,7 +309,7 @@ void ShaderGraphTab::RenderNodeInspector(ShaderGraph& graph)
         if (graph.SetParameter({"Tint", ShaderGraphValueType::Color, Variant(Color::WHITE)}))
             CommitGraphEdit(parameterBefore, "Added Tint parameter");
     }
-    EditorTheme::PopToolbarColors();
+    EditorThemeUI::PopToolbarColors();
 }
 
 void ShaderGraphTab::RenderConnections(const ShaderGraph& graph)
@@ -376,9 +376,9 @@ void ShaderGraphTab::RenderContent()
 
     if (!validationError_.empty())
     {
-        EditorTheme::PushDiagnosticText(true);
+        EditorThemeUI::PushDiagnosticText(true);
         ui::Text("Error: %s", validationError_.c_str());
-        EditorTheme::PopDiagnosticText();
+        EditorThemeUI::PopDiagnosticText();
     }
     RenderGeneratedSource();
 }
